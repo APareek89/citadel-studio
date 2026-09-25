@@ -1,7 +1,8 @@
 import { z } from "zod";
 import Ajv from "ajv";
 import type { Graph, GraphNode, Preflight } from "../shared/types.js";
-import { id } from "./store.js";
+import { randomUUID } from "node:crypto";
+const id = (prefix = "id") => `${prefix}_${randomUUID().slice(0, 12)}`;
 const ajv = new Ajv({ allErrors: true, strict: false, validateFormats: false });
 const rules = z.object({
   required: z.array(z.string().max(200)).max(20).optional(),

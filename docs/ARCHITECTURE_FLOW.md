@@ -6,6 +6,16 @@ This Markdown file is the canonical authored diagram source. Its Mermaid fences 
 
 The user selected a standalone viewer; no in-app debug tab is included. The generated HTML loads Mermaid 11 from a CDN and needs network access to render. Diagram text stays local; the only external request is for the rendering library and its dependencies.
 
+## Source and export implementation
+
+GitHub acquisition is now implemented in `server/github.ts` and wired into `server/index.ts`: the UI can list repositories through the existing authenticated `gh` CLI or connect a strict HTTPS GitHub URL. The service clones into private managed storage before handing the local path to discovery. It disables inherited Git configuration, hooks, templates and submodules, validates the origin and serializes concurrent publication. Existing managed checkouts are reused unchanged. The source-adapter trust gate still applies after cloning; download is not execution authorization.
+
+Diagram 04 now includes both GitHub acquisition and the local discovery boundary. Its Mermaid source and canonical block are synchronized; regenerate the standalone viewer with the commands below after any further diagram edit.
+
+The manifest export now contains a CLI and a minimal local browser wrapper (`npm run serve`), alongside the shared graph executor, validation, dependencies and empty environment template. The support-app ZIP passed a clean-directory install, graph test and one live CLI sample. Diagram 06's planned **automatic** readiness gate remains accurate: the export endpoint does not run these checks for each download. The browser wrapper additionally passed free HTTP boundary and interrupted-upload regression checks. Interactive model-backed browser acceptance remains separate from the recorded CLI evidence. Source-owned imports are explicitly rejected by export.
+
+Current evidence, live-versus-mocked provider coverage, the inconclusive connected red-team probe and final UI checks are in [QA-REPORT.md](QA-REPORT.md).
+
 ## Legend and ownership
 
 Blue: a model generates or judges. Green: deterministic code. Purple diamonds: conditions with a named enforcer. Pale purple: a library or data store. Cyan: a question returned to the user. Gray: terminal outcome. Each box declares its input and output. `config.model` names the model chosen for that run; there is no hard-coded universal model.
@@ -37,7 +47,7 @@ These are implementation limits, not promises of exact provider billing or compl
 | Master | `01-master.mmd` | `web/App.tsx`, `server/index.ts`, shared services |
 | Credentials/providers | `02-credentials-providers.mmd` | `server/providers.ts` |
 | Manifest execution | `03-manifest-runtime.mmd` | `server/graph.ts`, `server/runtime.ts`, `server/runs.ts`, `server/store.ts` |
-| Source import | `04-imported-source.mmd` | `server/importer.ts`, `server/learning-runner.ts` |
+| Source import | `04-imported-source.mmd` | `server/github.ts`, `server/importer.ts`, `server/learning-runner.ts` |
 | Product modes | `05-product-modes.mmd` | `server/workflows.ts`, `web/App.tsx` |
 | Export/hosting | `06-export-hosting.mmd` | `server/export.ts`; automatic readiness gate and AWS remain planned |
 | Code sandbox | `07-custom-code-sandbox.mmd` | `server/sandbox.ts` |
@@ -178,7 +188,12 @@ classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 ```mermaid
 %% 04 IMPLEMENTED — source map and narrowly trusted Learning Studio execution
 flowchart TD
-PATH["Resolve selected local checkout<br/>[FUNCTION]<br/>in: local repository path<br/>out: canonical directory; URL cloning unavailable"]:::fn
+SOURCE{"Repository source?<br/>[FUNCTION]<br/>in: local path, GitHub URL or picker choice<br/>out: local discovery or managed acquisition"}:::dec
+CATALOG["List GitHub repositories<br/>[FUNCTION]<br/>in: existing authenticated gh login<br/>out: at most 100 account repositories; 30-second deadline"]:::fn
+URL["Validate GitHub identity<br/>[FUNCTION]<br/>in: HTTPS github.com owner/repository URL<br/>out: normalized identity; reject credentials, escapes and extra paths"]:::fn
+CLONE["Acquire or reuse managed checkout<br/>[FUNCTION]<br/>in: validated identity and per-repository lock<br/>out: verified local source directory<br/>shallow clone; 90-second deadline; 2MB CLI output cap"]:::fn
+ISOLATE["Enforce Git acquisition boundary<br/>[FUNCTION]<br/>in: checkout and origin/config checks<br/>out: source only; no hooks, filters, submodules or repo scripts<br/>existing checkouts preserved; atomic publication"]:::fn
+PATH["Resolve selected local checkout<br/>[FUNCTION]<br/>in: local or managed repository path<br/>out: canonical directory"]:::fn
 FILES["Discover source resources<br/>[FUNCTION]<br/>in: repository directory<br/>out: at most 500 files, depth at most 6<br/>excludes secrets, symlinks and generated/dependency folders"]:::fn
 MAP["Build source-linked graph<br/>[FUNCTION]<br/>in: recognized paths and symbols<br/>out: workflow nodes plus collapsed UI, DB/auth and Markdown"]:::fn
 TRUST{"Approved source and platform?<br/>[FUNCTION]<br/>in: adapter, pinned revision and 14 allowlisted files<br/>out: isolated execution or discovery only<br/>macOS sandbox-exec required"}:::dec
@@ -191,6 +206,10 @@ LLM["Execute mediated model call<br/>[AGENT · run.config.model]<br/>in: origina
 ART["Render isolated overview artifact<br/>[FUNCTION]<br/>in: original schema-validated overview<br/>out: original HTML and in-memory artifact; no DB or billing"]:::fn
 RESULT["Return overview result and trace<br/>[FUNCTION]<br/>in: artifact and observed invocation events<br/>out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
 CLEAN["Force-stop and remove scratch files<br/>[FUNCTION]<br/>in: error, cancellation or 120-second deadline<br/>out: terminated worker and preserved partial trace"]:::term
+SOURCE -->|"local path"| PATH
+SOURCE -->|"GitHub picker"| CATALOG --> URL
+SOURCE -->|"GitHub URL"| URL
+URL --> CLONE --> ISOLATE --> PATH
 PATH --> FILES --> MAP --> TRUST
 TRUST -->|"unsupported or mismatched"| OPAQUE
 TRUST -->|"approved overview only"| GIT --> BUNDLE --> OS --> BRIDGE
@@ -335,6 +354,6 @@ Verification at this snapshot: the real Mermaid parser passed all seven diagrams
 - Local store permissions protect files from ordinary other-user access; this is not encrypted tenant storage.
 - The trusted imported overview disables retrieval and external persistence; full lesson generation remains discovery-only. Its macOS policy permits scoped read access plus root-directory metadata needed by the loader; network, file writes and child-process creation are denied. It is a reviewed-source adapter, not a general hostile-code sandbox.
 - Red-team specialists currently label different planned probe concerns; the source review is deterministic heuristics and semantic review uses the selected model. Separate autonomous specialist agents are not implemented.
-- Export assembly is implemented. A clean-directory install and sample run are release verification work; the download endpoint does not automatically enforce that readiness gate.
+- Export assembly and a clean-directory CLI sample are verified for the support app. The browser wrapper has free HTTP-boundary and abort-survival coverage; interactive model-backed browser acceptance is separate. The download endpoint does not automatically enforce a readiness gate for each download.
 - AWS configuration is ready, but cloud hosting, tenant identity and a remote runner/sandbox are not built. See [AWS-READINESS.md](AWS-READINESS.md).
 - Decisions and rejected alternatives are in [DECISIONS.md](DECISIONS.md).

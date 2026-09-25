@@ -432,7 +432,9 @@ export default function App() {
     [busy, setBusy] = useState("");
   const [mode, setMode] = useState<Mode>("build"),
     [step, setStep] = useState("Align"),
-    [projectId, setProjectId] = useState(""),
+    [projectId, setProjectId] = useState(
+      () => localStorage.getItem("workbench-project") || "",
+    ),
     [theme, setTheme] = useState(
       () => localStorage.getItem("workbench-theme") || "system",
     );
@@ -463,6 +465,10 @@ export default function App() {
     [eventId, setEventId] = useState("");
   const [repoPath, setRepoPath] = useState(""),
     [repoDefault, setRepoDefault] = useState("");
+  const [githubRepos, setGithubRepos] = useState<
+    | { name: string; url: string; isPrivate: boolean; description: string }[]
+    | null
+  >(null);
   const [redScope, setRedScope] = useState("local-test"),
     [brandRules, setBrandRules] = useState(
       "Be clear, accurate and respectful. State uncertainty. Never claim a tool action succeeded without evidence.",
@@ -510,18 +516,24 @@ export default function App() {
       typeof data.system.docker === "object"
         ? data.system.docker.available
         : data.system.docker;
+  const observedGraph = view === "observed" && run ? run.graph : graph;
   const running = !!run && !terminal(run),
-    selectedNode = graph?.nodes.find(
+    selectedNode = observedGraph?.nodes.find(
       (n) => selection?.type === "node" && n.id === selection.id,
     ),
-    selectedEdge = (view === "observed" && run ? run.graph : graph)?.edges.find(
+    selectedEdge = observedGraph?.edges.find(
       (e) => selection?.type === "edge" && e.id === selection.id,
     );
-  const observedGraph = view === "observed" && run ? run.graph : graph;
+  const [disconnected, setDisconnected] = useState(false);
   async function refresh() {
     const b = await api<Bootstrap>("/bootstrap");
+    setDisconnected(false);
     setData(b);
-    setProjectId((p) => p || b.projects[0]?.id || "");
+    setProjectId((p) =>
+      b.projects.some((project) => project.id === p)
+        ? p
+        : b.projects[0]?.id || "",
+    );
     return b;
   }
   useEffect(() => {
@@ -535,6 +547,9 @@ export default function App() {
       })
       .catch(() => {});
   }, []);
+  useEffect(() => {
+    if (projectId) localStorage.setItem("workbench-project", projectId);
+  }, [projectId]);
   useEffect(() => {
     if (!project) return;
     setBrief(project.brief);
@@ -557,7 +572,7 @@ export default function App() {
       setMode("connect");
       setStep("Map");
     }
-  }, [projectId]);
+  }, [project?.id]);
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () =>
@@ -590,7 +605,10 @@ export default function App() {
     data.reports.some((r) => r.status === "running");
   useEffect(() => {
     if (!hasActive) return;
-    const timer = setInterval(() => refresh().catch(() => {}), 1500);
+    const timer = setInterval(
+      () => refresh().catch(() => setDisconnected(true)),
+      1500,
+    );
     return () => clearInterval(timer);
   }, [hasActive]);
   useEffect(() => {
@@ -603,6 +621,52 @@ export default function App() {
       })
       .catch(() => {});
   }, [config.credentialId]);
+  const completedForCredential = data.runs
+    .filter(
+      (r) =>
+        r.status === "completed" &&
+        r.config.credentialId === config.credentialId,
+    )
+    .map((r) => r.id)
+    .sort()
+    .join(",");
+  useEffect(() => {
+    if (!config.credentialId || !completedForCredential || disconnected) return;
+    const credentialId = config.credentialId;
+    api<Model[]>(`/credentials/${credentialId}/models`)
+      .then((list) =>
+        setModels((current) => ({ ...current, [credentialId]: list })),
+      )
+      .catch(() => {});
+  }, [config.credentialId, completedForCredential, disconnected]);
+  const comparisonTraceState = comparison?.slots
+    .map(
+      (slot) =>
+        `${slot.runId || slot.id}:${data.runs.find((r) => r.id === slot.runId)?.status || slot.error || "pending"}`,
+    )
+    .join("|");
+  useEffect(() => {
+    if (mode !== "models" || !["Compare", "Graph Results"].includes(step))
+      return;
+    const completed =
+      comparison?.slots
+        .map((slot) =>
+          slot.error
+            ? undefined
+            : data.runs.find(
+                (r) => r.id === slot.runId && r.status === "completed",
+              ),
+        )
+        .filter((r): r is Run => !!r) || [];
+    if (!completed.some((r) => r.id === runId)) {
+      if (completed[0]) inspectRun(completed[0]);
+      else {
+        setRunId("");
+        setEventId("");
+      }
+    }
+    if (step === "Graph Results") setView("observed");
+  }, [mode, step, comparisonId, comparisonTraceState, runId]);
   useEffect(() => {
     if (notice) {
       const t = setTimeout(() => setNotice(""), 6000);
@@ -890,6 +954,7 @@ export default function App() {
         <div className="segmented">
           <button
             className={view === "design" ? "active" : ""}
+            disabled={mode === "models" && step === "Graph Results"}
             onClick={() => setView("design")}
           >
             {isImported ? "Source map" : "Graph"}
@@ -1182,9 +1247,7 @@ export default function App() {
           </Empty>
         </aside>
       );
-    const historicalNode = run?.graph.nodes.find((n) => n.id === selection.id),
-      node =
-        view === "observed" && historicalNode ? historicalNode : selectedNode;
+    const node = selectedNode;
     const events = run?.events.filter((e) => e.nodeId === selection.id) || [];
     const invocations = events.filter(
       (e) =>
@@ -1242,7 +1305,7 @@ export default function App() {
                 <div className="callout small">
                   {isImported
                     ? "This application owns its source. Configuration is read-only here; inspect the source location and adapter coverage."
-                    : `You are inspecting immutable run revision ${run?.graph.revision}. Switch to Graph to edit the current draft.`}
+                    : `You are inspecting immutable run revision ${run?.graph.revision}. ${mode === "models" ? "Use Open current draft" : "Switch to Graph"} to edit the current draft.`}
                 </div>
               )}
               {node ? (
@@ -1309,7 +1372,11 @@ export default function App() {
                     label="Output schema"
                     value={node.schema || {}}
                     disabled={locked}
-                    onSave={(schema) => patchNode({ schema })}
+                    onSave={(schema) =>
+                      patchNode({
+                        schema: Object.keys(schema).length ? schema : undefined,
+                      })
+                    }
                   />
                   {(node.role === "tool" || node.code) && (
                     <>
@@ -1358,7 +1425,7 @@ export default function App() {
                   )}
                   <div className="inspector-related">
                     <span className="eyebrow">CONNECTIONS</span>
-                    {graph.edges
+                    {observedGraph?.edges
                       .filter(
                         (e) => e.source === node.id || e.target === node.id,
                       )
@@ -1503,8 +1570,15 @@ export default function App() {
                     </pre>
                   </>
                 ) : (
-                  <Empty icon={Clock3} title="No invocation">
-                    This node was not observed in the selected run.
+                  <Empty
+                    icon={Clock3}
+                    title={
+                      selectedEdge ? "Connection evidence" : "No invocation"
+                    }
+                  >
+                    {selectedEdge
+                      ? "Select the target node to inspect the input delivered through this connection."
+                      : "This node was not observed in the selected run."}
                   </Empty>
                 )}
               </>
@@ -1751,17 +1825,35 @@ export default function App() {
             <div className="graph-guidance">
               <div>
                 <strong>
-                  {isImported
-                    ? "A map of the source, with coverage made explicit."
-                    : "Less wiring. More control."}
+                  {view === "observed"
+                    ? "Recorded evidence, tied to this run."
+                    : isImported
+                      ? "A map of the source, with coverage made explicit."
+                      : "Less wiring. More control."}
                 </strong>
                 <p>
-                  {isImported
-                    ? "Inferred relationships describe source structure. Start an instrumented run to see the path actually taken."
-                    : "Select a node to edit its instructions, schema or code. Drag between node handles to add a data connection."}
+                  {view === "observed"
+                    ? "Select a node to inspect recorded inputs, outputs and decisions. This graph revision is immutable; edits belong in the current draft."
+                    : isImported
+                      ? "Inferred relationships describe source structure. Start an instrumented run to see the path actually taken."
+                      : "Select a node to edit its instructions, schema or code. Drag between node handles to add a data connection."}
                 </p>
               </div>
-              {!isImported ? (
+              {view === "observed" ? (
+                <button
+                  className="button"
+                  onClick={() => {
+                    setView("design");
+                    navigate(
+                      isImported ? "connect" : "build",
+                      isImported ? "Map" : "Review",
+                    );
+                  }}
+                >
+                  {isImported ? "Open source map" : "Open current draft"}{" "}
+                  <ArrowRight size={15} />
+                </button>
+              ) : !isImported ? (
                 <button
                   className="button"
                   onClick={() => setStep("Run & Test")}
@@ -1786,14 +1878,14 @@ export default function App() {
       <div className="limits-grid">
         {(
           [
-            { key: "maxCalls", label: "Model calls", min: 1, max: 40 },
-            { key: "maxRevisions", label: "Revision attempts", min: 0, max: 5 },
-            { key: "timeoutMs", label: "Timeout (ms)", min: 1000, max: 300000 },
+            { key: "maxCalls", label: "Model calls", min: 1, max: 30 },
+            { key: "maxRevisions", label: "Revision attempts", min: 0, max: 3 },
+            { key: "timeoutMs", label: "Timeout (ms)", min: 1000, max: 180000 },
             {
               key: "maxOutputTokens",
               label: "Output token limit",
-              min: 128,
-              max: 8192,
+              min: 64,
+              max: 16000,
             },
           ] as const
         ).map((x) => (
@@ -1813,6 +1905,31 @@ export default function App() {
             />
           </Field>
         ))}
+        <Field
+          label="Cost cap (USD)"
+          hint="Optional. Requires a model with known text pricing."
+        >
+          <input
+            type="number"
+            min="0.001"
+            max="3"
+            step="0.01"
+            disabled={isImported}
+            value={graph.limits.maxCostUsd ?? ""}
+            placeholder="Call limits only"
+            onChange={(e) =>
+              updateGraph((g) => ({
+                ...g,
+                limits: {
+                  ...g.limits,
+                  maxCostUsd: e.target.value
+                    ? Number(e.target.value)
+                    : undefined,
+                },
+              }))
+            }
+          />
+        </Field>
       </div>
     );
   }
@@ -2046,14 +2163,90 @@ export default function App() {
           <section className="card">
             <div className="card-heading">
               <GitBranch size={20} />
-              <h3>Local repository</h3>
+              <h3>Connect a repository</h3>
+            </div>
+            <div className="github-connect">
+              <div className="row spread">
+                <div>
+                  <strong>From GitHub</strong>
+                  <p className="muted small">
+                    Uses the GitHub account already connected on this computer.
+                  </p>
+                </div>
+                <button
+                  className="button small"
+                  disabled={!!busy}
+                  onClick={() =>
+                    act("Loading GitHub repositories", async () => {
+                      setGithubRepos(
+                        await api<
+                          {
+                            name: string;
+                            url: string;
+                            isPrivate: boolean;
+                            description: string;
+                          }[]
+                        >("/repos/github"),
+                      );
+                    })
+                  }
+                >
+                  {busy === "Loading GitHub repositories" ? (
+                    <Loader2 size={13} className="spin" />
+                  ) : (
+                    <GitBranch size={13} />
+                  )}
+                  {githubRepos === null
+                    ? "Load GitHub repositories"
+                    : "Refresh repositories"}
+                </button>
+              </div>
+              {githubRepos !== null &&
+                (githubRepos.length > 0 ? (
+                  <>
+                    <Field label="GitHub repository">
+                      <select
+                        value={
+                          githubRepos.some((r) => r.url === repoPath)
+                            ? repoPath
+                            : ""
+                        }
+                        onChange={(e) => {
+                          if (e.target.value) setRepoPath(e.target.value);
+                        }}
+                      >
+                        <option value="">Choose a repository</option>
+                        {githubRepos.map((r) => (
+                          <option key={r.url} value={r.url}>
+                            {r.name} · {r.isPrivate ? "Private" : "Public"}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    {githubRepos.find((r) => r.url === repoPath)
+                      ?.description && (
+                      <p className="muted small">
+                        {
+                          githubRepos.find((r) => r.url === repoPath)
+                            ?.description
+                        }
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="muted small">
+                    No repositories were returned for the connected GitHub
+                    account. You can still provide a repository URL or local
+                    checkout below.
+                  </p>
+                ))}
             </div>
             <Field
-              label="Checkout path"
-              hint="Use a local checkout, or a supported GitHub repository URL. Private repositories require existing local access."
+              label="Local checkout or GitHub URL"
+              hint="Choose a repository above, paste its GitHub URL, or use a local checkout. No GitHub credentials are entered here."
             >
               <input
-                placeholder="/path/to/your/repository"
+                placeholder="/path/to/repository or https://github.com/owner/repo"
                 value={repoPath}
                 onChange={(e) => setRepoPath(e.target.value)}
               />
@@ -2085,8 +2278,9 @@ export default function App() {
               Connect & map <ArrowRight size={15} />
             </button>
             <div className="callout small">
-              Source discovery is separate from live instrumentation. Unknown
-              paths remain opaque rather than becoming invented execution edges.
+              GitHub sources are cloned into a managed, read-only checkout for
+              source discovery. Connecting does not execute repository code.
+              Real runs require a supported adapter; unknown paths stay opaque.
             </div>
           </section>
           <section className="card">
@@ -2500,27 +2694,49 @@ export default function App() {
         <>
           <div className="candidate-bar">
             <span className="eyebrow">CANDIDATE TRACE</span>
-            {comparison?.slots.map((s) => (
-              <button
-                key={s.id}
-                className={`button small ${s.runId === runId ? "active" : ""}`}
-                disabled={!s.runId}
-                onClick={() => {
-                  const r = data.runs.find((r) => r.id === s.runId);
-                  if (r) inspectRun(r);
-                }}
-              >
-                {s.label}
-                {s.error && " · error"}
-              </button>
-            ))}
+            {comparison?.slots.map((s) => {
+              const candidateRun = data.runs.find((r) => r.id === s.runId);
+              const ready = !s.error && candidateRun?.status === "completed";
+              return (
+                <button
+                  key={s.id}
+                  className={`button small ${s.runId === runId ? "active" : ""}`}
+                  disabled={!ready}
+                  title={
+                    s.error ||
+                    (ready
+                      ? "Inspect this recorded candidate trace"
+                      : `Candidate ${candidateRun?.status || "has not completed"}`)
+                  }
+                  onClick={() => {
+                    if (ready && candidateRun) inspectRun(candidateRun);
+                  }}
+                >
+                  {s.label}
+                  {s.error
+                    ? " · error"
+                    : candidateRun?.status !== "completed"
+                      ? ` · ${candidateRun?.status || "pending"}`
+                      : ""}
+                </button>
+              );
+            })}
             {!comparison && (
               <span className="muted">
                 Run a comparison to inspect candidate graphs.
               </span>
             )}
           </div>
-          {GraphWorkspace({ playground: false })}
+          {view === "observed" &&
+          run?.status === "completed" &&
+          comparison?.slots.some((s) => s.runId === run.id && !s.error) ? (
+            GraphWorkspace({ playground: false })
+          ) : (
+            <Empty icon={FlaskConical} title="No completed candidate trace yet">
+              Successful candidates become available here when their runs
+              finish. Candidate errors remain visible in Compare.
+            </Empty>
+          )}
         </>
       );
     return (
@@ -2571,7 +2787,7 @@ export default function App() {
                     <option value="workflow">
                       Complete workflow · independent downstream paths
                     </option>
-                    <option value="node">
+                    <option value="node" disabled={isImported}>
                       Fixed-input node · identical input per candidate
                     </option>
                   </select>
@@ -2584,11 +2800,7 @@ export default function App() {
                     >
                       <option value="">Select node</option>
                       {graph?.nodes
-                        .filter((n) =>
-                          ["agent", "orchestrator", "validator"].includes(
-                            n.role,
-                          ),
-                        )
+                        .filter((n) => n.role === "agent")
                         .map((n) => (
                           <option
                             key={n.id}
@@ -2833,9 +3045,9 @@ export default function App() {
                     </div>
                     <button
                       className="button small"
-                      disabled={!r}
+                      disabled={!r || r.status !== "completed" || !!s.error}
                       onClick={() => {
-                        if (r) {
+                        if (r?.status === "completed" && !s.error) {
                           inspectRun(r);
                           setStep("Graph Results");
                         }
@@ -3554,6 +3766,15 @@ export default function App() {
             </button>
           ))}
         </nav>
+        {disconnected && (
+          <div className="connection-banner" role="status">
+            <Loader2 size={14} className="spin" />
+            <span>
+              <strong>Connection interrupted.</strong> Reconnecting to the local
+              service. The last received trace remains visible.
+            </span>
+          </div>
+        )}
         {error && (
           <div className="error-banner" role="alert">
             <span>
@@ -3794,7 +4015,8 @@ function JsonEditor({
             const parsed = JSON.parse(text);
             if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
               throw new Error();
-            onSave(parsed);
+            if (JSON.stringify(parsed) !== JSON.stringify(value))
+              onSave(parsed);
             setInvalid("");
           } catch {
             setInvalid(

@@ -1,3 +1,5 @@
+import { estimate } from "./pricing.js";
+export { estimate } from "./pricing.js";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -197,7 +199,7 @@ export async function discoverModels(credentialId: string): Promise<Model[]> {
               /^gemini-(?:(?:2\.5|3(?:\.\d+)?)-(?:flash|pro)|(?:flash|flash-lite|pro)-latest)/.test(
                 modelId,
               ) &&
-              !/image|tts|robot|live|audio|computer-use|transcribe|custom-tools|omni/.test(
+              !/image|tts|robot|live|audio|computer-use|transcribe|custom.?tools|omni/.test(
                 modelId,
               )
             : provider === "anthropic"
@@ -265,25 +267,6 @@ export function modelFor(config: ModelConfig) {
       "Selected model is unavailable or not compatible with text workflows. Refresh the model list.",
     );
   return m;
-}
-export function estimate(
-  provider: Provider,
-  model: string,
-  inputTokens: number,
-  outputTokens: number,
-): number | undefined {
-  const rates: Record<string, [number, number]> = {
-    "gemini-3.5-flash-lite": [0.3, 2.5],
-    "gemini-3.5-flash": [0.75, 3.75],
-    "gemini-3.8-flash": [0.75, 3.75],
-    "gemini-2.5-flash-lite": [0.1, 0.4],
-    "gemini-2.5-flash": [0.3, 2.5],
-    "gemini-2.5-pro": [2.5, 15],
-  };
-  const rate = provider === "gemini" ? rates[model] : undefined;
-  return rate
-    ? (inputTokens * rate[0] + outputTokens * rate[1]) / 1e6
-    : undefined;
 }
 export interface GenerateResult {
   text: string;

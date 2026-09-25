@@ -134,7 +134,12 @@ classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 <h2>04 IMPLEMENTED — source map and narrowly trusted Learning Studio execution</h2>
 <pre class="mermaid">%% 04 IMPLEMENTED — source map and narrowly trusted Learning Studio execution
 flowchart TD
-PATH["Resolve selected local checkout&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: local repository path&lt;br/&gt;out: canonical directory; URL cloning unavailable"]:::fn
+SOURCE{"Repository source?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: local path, GitHub URL or picker choice&lt;br/&gt;out: local discovery or managed acquisition"}:::dec
+CATALOG["List GitHub repositories&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: existing authenticated gh login&lt;br/&gt;out: at most 100 account repositories; 30-second deadline"]:::fn
+URL["Validate GitHub identity&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: HTTPS github.com owner/repository URL&lt;br/&gt;out: normalized identity; reject credentials, escapes and extra paths"]:::fn
+CLONE["Acquire or reuse managed checkout&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: validated identity and per-repository lock&lt;br/&gt;out: verified local source directory&lt;br/&gt;shallow clone; 90-second deadline; 2MB CLI output cap"]:::fn
+ISOLATE["Enforce Git acquisition boundary&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: checkout and origin/config checks&lt;br/&gt;out: source only; no hooks, filters, submodules or repo scripts&lt;br/&gt;existing checkouts preserved; atomic publication"]:::fn
+PATH["Resolve selected local checkout&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: local or managed repository path&lt;br/&gt;out: canonical directory"]:::fn
 FILES["Discover source resources&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: repository directory&lt;br/&gt;out: at most 500 files, depth at most 6&lt;br/&gt;excludes secrets, symlinks and generated/dependency folders"]:::fn
 MAP["Build source-linked graph&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: recognized paths and symbols&lt;br/&gt;out: workflow nodes plus collapsed UI, DB/auth and Markdown"]:::fn
 TRUST{"Approved source and platform?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: adapter, pinned revision and 14 allowlisted files&lt;br/&gt;out: isolated execution or discovery only&lt;br/&gt;macOS sandbox-exec required"}:::dec
@@ -147,6 +152,10 @@ LLM["Execute mediated model call&lt;br/&gt;[AGENT · run.config.model]&lt;br/&gt
 ART["Render isolated overview artifact&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: original schema-validated overview&lt;br/&gt;out: original HTML and in-memory artifact; no DB or billing"]:::fn
 RESULT["Return overview result and trace&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: artifact and observed invocation events&lt;br/&gt;out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
 CLEAN["Force-stop and remove scratch files&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: error, cancellation or 120-second deadline&lt;br/&gt;out: terminated worker and preserved partial trace"]:::term
+SOURCE --&gt;|"local path"| PATH
+SOURCE --&gt;|"GitHub picker"| CATALOG --&gt; URL
+SOURCE --&gt;|"GitHub URL"| URL
+URL --&gt; CLONE --&gt; ISOLATE --&gt; PATH
 PATH --&gt; FILES --&gt; MAP --&gt; TRUST
 TRUST --&gt;|"unsupported or mismatched"| OPAQUE
 TRUST --&gt;|"approved overview only"| GIT --&gt; BUNDLE --&gt; OS --&gt; BRIDGE

@@ -30,7 +30,7 @@ Optional `WORKBENCH_SPEND_LIMIT_USD=3 npm start` applies a cumulative local spen
 
 ## Honest boundaries
 
-- Connect accepts an existing **local checkout**. Clone a private/public GitHub repository yourself with authenticated Git first; URL cloning from the UI is not implemented.
+- Connect accepts a **local checkout or GitHub URL**. The repository picker uses your authenticated local GitHub CLI. URL connections create a private managed shallow clone without running hooks, install scripts or submodules. Existing managed clones are reused unchanged; reconnect does not pull or reset local changes.
 - Learning Studio executes the **overview path only** at inspected revision `5968d23`. Full lesson build and other routes are mapped, not executed. The adapter disables database, uploads/retrieval, billing, auth and Langfuse; output uses model knowledge and an isolated memory artifact store. It is not a full production-environment reproduction.
 - That reviewed adapter uses a tested macOS sandbox. Unknown or changed imported code stays discovery-only. Arbitrary editable code requires Docker and the `node:22-alpine` image; otherwise preflight blocks it. Docker is not installed on this machine yet.
 - Built-in tools: uppercase, word count and JSON formatting. External tool integrations, general source patching, arbitrary branching languages and automatic deployment are not implemented.

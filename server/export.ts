@@ -21,14 +21,14 @@ export async function exportProject(project: Project, res: Response) {
   const zip = archiver("zip", { zlib: { level: 9 } });
   zip.on("error", () => res.destroy());
   zip.pipe(res);
-  const include = ["server/runtime.ts", "server/graph.ts", "server/sandbox.ts"];
+  const include = [
+    "server/runtime.ts",
+    "server/graph.ts",
+    "server/sandbox.ts",
+    "server/pricing.ts",
+  ];
   for (const file of include) {
     let source = readFileSync(path.resolve(file), "utf8");
-    if (file.endsWith("graph.ts"))
-      source = source.replace(
-        "import { id } from './store.js';",
-        "import { randomUUID } from 'node:crypto'; const id=(prefix='id')=>prefix+'_'+randomUUID();",
-      );
     zip.append(source, { name: file });
   }
   zip.append(readFileSync("shared/types.ts"), { name: "shared/types.ts" });
@@ -78,6 +78,7 @@ export async function exportProject(project: Project, res: Response) {
 }
 const exportRunner = String.raw`import {readFileSync,writeFileSync} from 'node:fs';
 import {executeGraph} from './server/runtime.js';
+import {estimate} from './server/pricing.js';
 try{process.loadEnvFile('.env');}catch{}
 const key=process.env.API_KEY;if(!key)throw new Error('Set API_KEY in .env');
 const provider=process.env.PROVIDER||'gemini',model=process.env.MODEL||'gemini-3.5-flash-lite';
@@ -86,7 +87,7 @@ const signal=AbortSignal.timeout(graph.limits.timeoutMs);
 const clean=(v:any)=>JSON.parse(JSON.stringify(v).split(key).join('[REDACTED]'));
 const generate=async(system:string,input:string,options:any={})=>{
 if(++calls>graph.limits.maxCalls)throw new Error('Model-call budget exhausted');
-const max=options.maxOutputTokens||graph.limits.maxOutputTokens;if(graph.limits.maxCostUsd!==undefined){const prices:Record<string,number[]>={'gemini-3.5-flash-lite':[0.3,2.5],'gemini-3.5-flash':[0.75,3.75],'gemini-3.8-flash':[0.75,3.75],'gemini-2.5-flash-lite':[0.1,0.4],'gemini-2.5-flash':[0.3,2.5],'gemini-2.5-pro':[2.5,15]};const price=provider==='gemini'?prices[model]:undefined;if(!price)throw new Error('Dollar cap needs known model pricing');const reserve=(Buffer.byteLength(system+input)*price[0]+max*price[1])/1e6;if(reservedUsd+reserve>graph.limits.maxCostUsd)throw new Error('Cost budget exhausted');reservedUsd+=reserve;}const json=options.json?'\nReturn only valid JSON.':'';let url:string,headers:Record<string,string>,body:any;
+const max=options.maxOutputTokens||graph.limits.maxOutputTokens;if(graph.limits.maxCostUsd!==undefined){const reserve=estimate(provider as any,model,Buffer.byteLength(system+input),max);if(reserve===undefined)throw new Error('Dollar cap needs known model pricing');if(reservedUsd+reserve>graph.limits.maxCostUsd)throw new Error('Cost budget exhausted');reservedUsd+=reserve;}const json=options.json?'\nReturn only valid JSON.':'';let url:string,headers:Record<string,string>,body:any;
 if(provider==='gemini'){url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent';headers={'x-goog-api-key':key};body={systemInstruction:{parts:[{text:system+json}]},contents:[{role:'user',parts:[{text:input}]}],generationConfig:{maxOutputTokens:max,temperature:0.2,...(options.json?{responseMimeType:'application/json'}:{}),...(model.startsWith('gemini-2.5-flash')?{thinkingConfig:{thinkingBudget:0}}:{})}};}
 else if(provider==='anthropic'){url='https://api.anthropic.com/v1/messages';headers={'x-api-key':key,'anthropic-version':'2023-06-01'};body={model,max_tokens:max,system:system+json,messages:[{role:'user',content:input}]};}
 else{const bases:any={openai:'https://api.openai.com/v1',groq:'https://api.groq.com/openai/v1',openrouter:'https://openrouter.ai/api/v1'};if(!bases[provider])throw new Error('Unsupported provider');url=bases[provider]+'/chat/completions';headers={Authorization:'Bearer '+key};body={model,messages:[{role:'system',content:system+json},{role:'user',content:input}],...(provider==='openai'?{max_completion_tokens:max}:{max_tokens:max}),...(provider==='openrouter'?{provider:{allow_fallbacks:false}}:{})};}
@@ -108,7 +109,7 @@ createServer(async(req,res)=>{
  if(req.method!=='POST'||req.url!=='/run'||req.headers['content-type']!=='application/json'){res.writeHead(404);return res.end();}
  res.setHeader('Content-Type','application/json');
  if(busy){res.writeHead(429);return res.end(JSON.stringify({error:'One run is already active. Please wait.'}));}
- let body='';for await(const chunk of req){body+=chunk;if(body.length>50000){res.writeHead(413);return res.end(JSON.stringify({error:'Input too large'}));}}
+ let body='';try{for await(const chunk of req){body+=chunk;if(body.length>50000){res.writeHead(413);return res.end(JSON.stringify({error:'Input too large'}));}}}catch{if(!res.destroyed&&!res.writableEnded){res.writeHead(400);res.end(JSON.stringify({error:'Request body was interrupted'}));}return;}
  let input:string;try{input=JSON.parse(body).input;if(typeof input!=='string'||!input.trim()||input.length>40000)throw new Error();}catch{res.writeHead(400);return res.end(JSON.stringify({error:'Add a text input under 40,000 characters.'}));}
  busy=true;const child=spawn(process.execPath,['--import','tsx','app.ts',input],{env:process.env,stdio:['ignore','pipe','pipe'],timeout:180000});let out='',err='';child.stdout.on('data',b=>{out+=b;if(out.length>150000)child.kill('SIGKILL');});child.stderr.on('data',b=>{err+=b;});child.on('error',()=>{busy=false;res.writeHead(500);res.end(JSON.stringify({error:'Could not start the runtime'}));});child.on('close',code=>{busy=false;if(res.writableEnded)return;if(code!==0){res.writeHead(400);res.end(JSON.stringify({error:'Workflow did not complete. Check the local terminal and trace.json.'}));}else res.end(JSON.stringify({output:out.trim()}));});
 }).listen(8080,'127.0.0.1',()=>console.log('Agent app: http://127.0.0.1:8080'));

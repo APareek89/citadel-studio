@@ -24,3 +24,9 @@ User approved free automatic checks 2026-09-25. Paid tests are separate: US$3 ma
 
 ## Journal
 - 2026-09-25: Setup; tests not yet run. Budget used: US$0.
+
+- 2026-09-25: Free suite passed 51/51 with no skips; production build passed. Includes real macOS sandbox denial/cancel checks, provider fixtures, API restart/security boundaries, GitHub clone isolation and shared pricing regressions.
+- 2026-09-25: Live Gemini milestones passed: approved alignment -> graph -> run; five slots with three successes/two isolated configuration errors; SAFE baseline -> BROKEN regression; seeded canary reproduction -> bounded blocking gate; original Learning Studio overview; clean exported install and live CLI response. UI-created JSON contract eval passed 1/1. One connected red probe was inconclusive due original schema validation then output cap, retained as failure evidence.
+- 2026-09-25: Root Codex in-app browser verified mobile/desktop, light/dark, create/edit/run, hidden nodes, private GitHub picker, diagnosis, historical immutable trace, red findings, regression results and model outputs. Export disconnect regression and final Model Lab navigation verification in progress. Estimated/reserved model QA remains below US$0.10 including export sample (US$3 approved cap). See docs/QA-REPORT.md for final evidence and limitations.
+
+- 2026-09-25 final gate: 56/56 free tests passed, zero skips; TypeScript/production build passed. Fresh final ZIP installs and validates independently, and includes shared pricing plus abort-survival fix. Final IAB confirms Model Lab defaults to a completed immutable trace, candidate switching works and current-draft routing works; project reload restores saved brief/alignment/graph. Browser warning/error log is empty. No further paid calls were needed.

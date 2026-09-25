@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import type { Provider, ModelConfig, Project } from "../shared/types.js";
+import type { Provider, ModelConfig, Project, Graph } from "../shared/types.js";
 
 const directory = await mkdtemp(path.join(tmpdir(), "citadel-provider-tests-"));
 process.env.WORKBENCH_DATA_DIR = directory;
+process.env.WORKBENCH_SPEND_LIMIT_USD = "0";
 process.env.WORKBENCH_SECRETS_FILE = path.join(
   directory,
   "nonexistent-secrets",
@@ -485,6 +486,340 @@ test("cancelling a real run aborts its mocked provider request and preserves ear
           (e) => e.nodeId === "output" && e.type === "node.completed",
         ),
       );
+    },
+  );
+});
+
+test("safeObject redacts Bearer credentials without corrupting nested JSON or scalar types", () => {
+  const key = "nested-redaction-synthetic-credential-12345";
+  providers.addCredential("openai", "Redaction regression", key);
+  const original = {
+    authorization: `Bearer ${key}`,
+    nested: {
+      header: "Bearer another-synthetic-token",
+      note: `Before ${key} after`,
+      count: 7,
+      enabled: false,
+      empty: null,
+    },
+    values: [`Bearer ${key}`, 1, true, null, { token: key }],
+  };
+  const safe = providers.safeObject(original);
+  assert.deepEqual(safe, {
+    authorization: "Bearer [REDACTED]",
+    nested: {
+      header: "Bearer [REDACTED]",
+      note: "Before [REDACTED] after",
+      count: 7,
+      enabled: false,
+      empty: null,
+    },
+    values: ["Bearer [REDACTED]", 1, true, null, { token: "[REDACTED]" }],
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(safe)), safe);
+  assert.ok(!JSON.stringify(safe).includes(key));
+  assert.equal(
+    original.authorization,
+    `Bearer ${key}`,
+    "Sanitizing a snapshot must not mutate the original.",
+  );
+});
+
+test("successful inference verification belongs only to the credential that made the call", async () => {
+  const model = "gpt-4.1-credential-scope";
+  let post = 0;
+  await mock(
+    async (_url, init = {}) => {
+      if (init.method !== "POST") return json(models("openai", model));
+      post++;
+      return json(completion("openai"));
+    },
+    async () => {
+      const first = await credential(
+        "openai",
+        model,
+        "first-verification-synthetic-key",
+      );
+      assert.equal(providers.modelFor(first).verified, false);
+      await providers.generate(first, "system", "input");
+      assert.equal(providers.modelFor(first).verified, true);
+      // Discover the second credential after the success, so a provider/model-wide
+      // verification cache cannot accidentally transfer the first key's proof.
+      const second = await credential(
+        "openai",
+        model,
+        "second-verification-synthetic-key",
+      );
+      assert.equal(providers.modelFor(second).available, true);
+      assert.equal(providers.modelFor(second).verified, false);
+      await providers.discoverModels(first.credentialId);
+      await providers.discoverModels(second.credentialId);
+      assert.equal(providers.modelFor(first).verified, true);
+      assert.equal(providers.modelFor(second).verified, false);
+      assert.equal(post, 1);
+    },
+  );
+});
+
+test("Gemini discovery excludes music, image, transcription and deep-research endpoints", async () => {
+  const supported = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-3.5-flash",
+    "gemini-3.8-flash",
+    "gemini-flash-latest",
+  ];
+  const excluded = [
+    "lyria-002",
+    "lyria-realtime-exp",
+    "nano-banana-pro-preview",
+    "gemini-2.5-flash-image",
+    "gemini-3-pro-image-preview",
+    "gemini-3.5-flash-transcribe",
+    "deep-research-pro-preview-12-2025",
+    "gemini-deep-research-preview",
+    "gemini-2.5-flash-native-audio-preview",
+    "gemini-2.5-flash-preview-tts",
+  ];
+  let requests = 0;
+  await mock(
+    async (_url, init = {}) => {
+      assert.notEqual(
+        init.method,
+        "POST",
+        "Discovery must never probe a model with paid inference.",
+      );
+      requests++;
+      return json({
+        models: [
+          ...[...supported, ...excluded].map((name) => ({
+            name: `models/${name}`,
+            supportedGenerationMethods: ["generateContent"],
+          })),
+          {
+            name: "models/gemini-2.5-flash-embedding-only",
+            supportedGenerationMethods: ["embedContent"],
+          },
+        ],
+      });
+    },
+    async () => {
+      const config = await credential(
+        "gemini",
+        supported[0],
+        "gemini-discovery-filter-synthetic-key",
+      );
+      const discovered = providers.cachedModels(config.credentialId);
+      assert.deepEqual(
+        discovered.map((m) => m.id),
+        [...supported].sort(),
+      );
+      assert.ok(discovered.every((m) => m.available && m.text && !m.verified));
+      for (const model of excluded)
+        assert.throws(
+          () => providers.modelFor({ ...config, model }),
+          /not compatible/,
+        );
+      assert.equal(requests, 1);
+    },
+  );
+});
+
+async function comparisonProject(
+  name: string,
+  agentCount: number,
+  limits: Partial<Graph["limits"]> = {},
+) {
+  const { state } = await import("../server/store.js");
+  const { defaultGraph } = await import("../server/graph.js");
+  const graph = defaultGraph(name);
+  graph.nodes = [
+    { id: "entry", label: "Input", role: "orchestrator" },
+    ...Array.from({ length: agentCount }, (_, index) => ({
+      id: `agent_${index}`,
+      label: `Agent ${index}`,
+      role: "agent" as const,
+      prompt: "Return a concise answer.",
+    })),
+    { id: "output", label: "Result", role: "output" },
+  ];
+  graph.edges = graph.nodes.slice(1).map((node, index) => ({
+    id: `edge_${index}`,
+    source: graph.nodes[index].id,
+    target: node.id,
+    kind: "data",
+    label: "Previous output",
+  }));
+  graph.limits = { ...graph.limits, ...limits };
+  const project: Project = {
+    id: name,
+    name,
+    brief: "Budget regression",
+    graph,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  state.projects.push(project);
+  return project;
+}
+
+async function settleComparison(
+  comparison: Awaited<
+    ReturnType<(typeof import("../server/workflows.js"))["compare"]>
+  >,
+) {
+  const { state } = await import("../server/store.js");
+  const { waitRun } = await import("../server/runs.js");
+  const runs = comparison.slots
+    .filter((slot) => slot.runId)
+    .map((slot) => state.runs.find((run) => run.id === slot.runId)!);
+  await Promise.all(runs.map((run) => waitRun(run)));
+  return runs;
+}
+
+test("comparison respects each graph's call cap even when campaign allowance remains", async () => {
+  const { compare } = await import("../server/workflows.js");
+  const project = await comparisonProject("per-run-comparison-call-cap", 2, {
+    maxCalls: 1,
+  });
+  let posts = 0;
+  await mock(
+    async (_url, init = {}) => {
+      if (init.method !== "POST")
+        return json(models("openai", "gpt-4.1-run-call-cap"));
+      posts++;
+      return json(completion("openai"));
+    },
+    async () => {
+      const config = await credential(
+        "openai",
+        "gpt-4.1-run-call-cap",
+        "per-run-call-cap-synthetic-key",
+      );
+      const comparison = await compare({
+        projectId: project.id,
+        input: "Same prompt",
+        strategy: "workflow",
+        slots: [
+          { label: "Valid candidate", config },
+          // This rejected slot still contributes to the two-call campaign allowance.
+          // The valid run must stop at its own one-call cap, not spend the spare call.
+          {
+            label: "Invalid candidate",
+            config: {
+              credentialId: "budget-test-missing",
+              model: config.model,
+            },
+          },
+        ],
+      });
+      const runs = await settleComparison(comparison);
+      assert.equal(runs.length, 1);
+      assert.equal(posts, 1);
+      assert.equal(runs[0].status, "failed");
+      assert.match(runs[0].error || "", /Model-call budget exhausted/);
+      assert.equal(
+        runs[0].events.filter(
+          (event) =>
+            event.type === "node.completed" &&
+            event.nodeId?.startsWith("agent_"),
+        ).length,
+        1,
+      );
+      assert.ok(comparison.slots[1].error);
+    },
+  );
+});
+
+test("comparison respects each graph's dollar cap before any provider inference", async () => {
+  const { compare } = await import("../server/workflows.js");
+  const project = await comparisonProject("per-run-comparison-cost-cap", 1, {
+    maxCalls: 4,
+    maxCostUsd: 0.001,
+    maxOutputTokens: 16000,
+  });
+  let posts = 0;
+  await mock(
+    async (_url, init = {}) => {
+      if (init.method !== "POST")
+        return json(models("gemini", "gemini-2.5-pro"));
+      posts++;
+      return json(completion("gemini"));
+    },
+    async () => {
+      const config = await credential(
+        "gemini",
+        "gemini-2.5-pro",
+        "per-run-cost-cap-synthetic-key",
+      );
+      const comparison = await compare({
+        projectId: project.id,
+        input: "Same prompt",
+        strategy: "workflow",
+        slots: [
+          { label: "First", config },
+          { label: "Second", config },
+        ],
+      });
+      const runs = await settleComparison(comparison);
+      assert.equal(runs.length, 2);
+      assert.equal(posts, 0);
+      for (const run of runs) {
+        assert.equal(run.status, "failed");
+        assert.match(run.error || "", /Cost budget would be exceeded/);
+      }
+    },
+  );
+});
+
+test("comparison enforces a shared thirty-call campaign cap across individually permitted runs", async () => {
+  const { compare } = await import("../server/workflows.js");
+  const project = await comparisonProject("shared-comparison-call-cap", 16, {
+    maxCalls: 30,
+  });
+  let posts = 0;
+  await mock(
+    async (_url, init = {}) => {
+      if (init.method !== "POST")
+        return json(models("openai", "gpt-4.1-campaign-cap"));
+      posts++;
+      return json(completion("openai", "Concise output"));
+    },
+    async () => {
+      const config = await credential(
+        "openai",
+        "gpt-4.1-campaign-cap",
+        "campaign-call-cap-synthetic-key",
+      );
+      const comparison = await compare({
+        projectId: project.id,
+        input: "Same prompt",
+        strategy: "workflow",
+        slots: [
+          { label: "First", config },
+          { label: "Second", config },
+        ],
+      });
+      const runs = await settleComparison(comparison);
+      assert.equal(runs.length, 2);
+      assert.equal(
+        posts,
+        30,
+        "The two sixteen-call runs must share the campaign's thirty-call ceiling.",
+      );
+      assert.ok(runs.some((run) => run.status === "failed"));
+      for (const run of runs) {
+        if (run.status === "failed")
+          assert.match(run.error || "", /Model-call budget exhausted/);
+        else assert.equal(run.status, "completed");
+        assert.ok(
+          run.events.filter(
+            (event) =>
+              event.type === "node.completed" &&
+              event.nodeId?.startsWith("agent_"),
+          ).length <= 16,
+        );
+      }
     },
   );
 });

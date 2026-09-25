@@ -1965,8 +1965,8 @@ details ul {
 }
 .comparison-results {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
   align-items: stretch;
 }
 .candidate-result {
@@ -1990,7 +1990,7 @@ details ul {
   line-height: 1.8;
   white-space: pre-wrap;
   padding: 23px 0 20px;
-  max-height: 470px;
+  max-height: 260px;
   overflow: auto;
 }
 .metrics {
@@ -2701,7 +2701,7 @@ details ul {
     flex-shrink: 0;
   }
   .inspector-body {
-    max-height: 470px;
+    max-height: 260px;
     padding: 21px;
   }
   .inspector-head {
@@ -3172,5 +3172,56 @@ details ul {
   }
   .mobile-project-picker .button {
     font-size: 10px;
+  }
+}
+.github-connect {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 19px;
+  margin-bottom: 22px;
+}
+.github-connect > .row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 13px;
+  margin-bottom: 14px;
+}
+.github-connect strong {
+  font-size: 12px;
+  font-weight: 550;
+}
+.github-connect p {
+  line-height: 1.7;
+  margin: 6px 0 0;
+}
+.github-connect .field {
+  margin-top: 17px;
+  margin-bottom: 0;
+}
+.github-connect select {
+  width: 100%;
+  max-width: 100%;
+}
+.connection-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 23px;
+  flex-shrink: 0;
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-size: 11px;
+  line-height: 1.6;
+  border-top: 1px solid color-mix(in srgb, var(--amber) 15%, transparent);
+}
+.connection-banner strong {
+  font-weight: 600;
+}
+@media (max-width: 780px) {
+  .connection-banner {
+    padding: 11px 17px;
+    align-items: flex-start;
+  }
+  .connection-banner > svg {
+    margin-top: 3px;
   }
 }

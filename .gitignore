@@ -13,3 +13,5 @@ tmp/
 .playwright-cli/
 .DS_Store
 coverage/
+
+!docs/mermaid/*.mmd

@@ -20,7 +20,7 @@
 
 **Rejected:** arbitrary two-way synchronization between any repository and an editable visual graph. Unsupported components remain opaque, with source inspection available. A static map is not a successful instrumented run.
 
-**Consequence:** source-owned imported graphs cannot silently become executable manifest graphs. Live adapter coverage is separately identified and gated.
+**Consequence:** source-owned imported graphs cannot silently become executable manifest graphs. Local paths and strict HTTPS GitHub URLs are accepted. GitHub acquisition uses the existing CLI login, a shallow managed checkout and disabled hooks, templates and submodules. Reusing a checkout preserves its current files; it does not silently pull or reset. Repository acquisition and live adapter coverage are separately identified and gated.
 
 ## 03 — Roles describe purpose; the runtime determines execution
 
@@ -104,13 +104,13 @@
 
 ## 11 — Launch initially means a portable project download
 
-**Chosen:** export source, graph configuration, dependencies, checks, setup instructions and a secret-free environment template. The export must pass a clean-directory run before being described as ready; the download endpoint does not enforce this automatically.
+**Chosen:** export source, graph configuration, dependencies, checks, setup instructions and a secret-free environment template, with both a CLI and a minimal local browser wrapper. The support-app export passed a clean-directory install, graph check and live CLI sample. The download endpoint does not perform that verification automatically for every ZIP; the browser wrapper passed free HTTP boundary and interrupted-upload regression tests; an interactive model-backed browser journey is separate.
 
 **Reason:** this gives the user an application they can own while keeping hosting separate from local development.
 
 **Rejected:** a decorative download containing only graph JSON, or claiming deployment merely because a ZIP exists.
 
-**Consequence:** source-owned imports require an explicit export boundary; a generated manifest runner must not misrepresent unsupported imported behavior.
+**Consequence:** source-owned imports remain in their original repository and are rejected by this export path. The exported runner enforces graph call/time limits and a configured known-price dollar cap; it has a separate process and does not inherit the workbench’s persistent global spend ledger. A successful CLI sample is not a hosted deployment or full browser acceptance test.
 
 ## 12 — Standalone diagrams and staged AWS hosting
 
@@ -121,3 +121,7 @@
 **Rejected:** a debug panel shipped as product UI, or treating the local Docker/repository environment as if it can be moved unchanged into a Lambda function.
 
 **Consequence:** the generated viewer loads Mermaid from a CDN and needs connectivity to render. AWS CLI/profile setup is complete, but no cloud resources have been provisioned. Hosted repository/code execution needs an authenticated local runner or a separately designed hosted sandbox; neither is implied by hosting the UI.
+
+## QA evidence boundary
+
+Live inference in this checkpoint used Gemini only; the other four provider adapters are fixture-tested. One connected red-team probe remains inconclusive after schema validation and an output-cap failure. These limits are preserved in [QA-REPORT.md](QA-REPORT.md). AWS setup is read-only and Docker is absent. No hosted auth/database or general repository runtime is implied by the local MVP.

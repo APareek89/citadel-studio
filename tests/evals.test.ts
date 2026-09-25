@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkCase } from "../server/workflows.js";
-import { addCredential, redact } from "../server/providers.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+process.env.WORKBENCH_DATA_DIR = mkdtempSync(
+  path.join(tmpdir(), "workbench-eval-tests-"),
+);
+const { checkCase } = await import("../server/workflows.js");
+const { addCredential, redact } = await import("../server/providers.js");
 test("deterministic assertion failures differ from infrastructure errors", () => {
   assert.deepEqual(
     checkCase(

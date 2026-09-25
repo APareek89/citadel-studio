@@ -28,6 +28,7 @@ import {
 } from "./workflows.js";
 import { exportProject } from "./export.js";
 import { discoverRepo } from "./importer.js";
+import { listGithubRepos, checkoutGithub } from "./github.js";
 import type {
   Project,
   Provider,
@@ -128,12 +129,10 @@ app.put("/api/projects/:id", (req, res) => {
       );
     const check = validateGraph(body.graph);
     if (!check.ok)
-      return res
-        .status(422)
-        .json({
-          error: check.issues.map((i) => i.message).join("; "),
-          issues: check.issues,
-        });
+      return res.status(422).json({
+        error: check.issues.map((i) => i.message).join("; "),
+        issues: check.issues,
+      });
     project.graph = safeObject({
       ...body.graph,
       id: project.graph.id,
@@ -237,6 +236,9 @@ app.get(
   "/api/projects/:id/export",
   async (req, res) => await exportProject(projectById(req.params.id), res),
 );
+app.get("/api/repos/github", async (_req, res) =>
+  res.json(await listGithubRepos()),
+);
 app.get("/api/repos/default", (_req, res) =>
   res.json({
     path: path.join(
@@ -259,7 +261,9 @@ app.post("/api/repos/connect", async (req, res) => {
       projectId: z.string().optional(),
     })
     .parse(req.body);
-  const discovered = await discoverRepo(b.path);
+  const discovered = await discoverRepo(
+    /^https:\/\//i.test(b.path) ? await checkoutGithub(b.path) : b.path,
+  );
   let p: Project;
   if (b.projectId) {
     p = projectById(b.projectId);
