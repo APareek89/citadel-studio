@@ -1,4 +1,11 @@
 # Handoff
+## AWS deployment in progress — resumed 25 September 2026
+User said “go” after pausing. Private repo https://github.com/APareek89/citadel-studio currently contains master/eac0f2a; hosting changes remain local pending final review/checkpoint. AWS stack agent-workbench-preview is CREATE_COMPLETE in ap-south-1. New instance is online through SSM. Bootstrap-ready, Node22 and npm verified. Dedicated blank8GB volume was verified by AWS volume serial, formatted ext4 and mounted byUUID at /var/lib/agent-workbench. Appservice will require this mount. Separate existing demo-studio instance remains untouched.
+
+Caddy2.11.4 officialSHA512 checked locally and onhost. Generated ownerpassword stays in mode600 .local/deployment/AWS-ACCESS.txt; server holds bcrypt hash and randomproxysecret. Privateencrypted temporaryS3 bootstrap was removed after successful installation. No model keys/laptopstate uploaded. No app has started yet. Target https://65.2.235.5.sslip.io. Newprivatehost uses2.80USD model ledger cap to stay below priorbuild-wide3USD authorization; no new inference planned. BaselineAWSestimate~13.3USD/month beforecredits.
+
+Next: finalmergedrelease/securityreview, checkpoint+push, rebuildcleanrelease, install, verifypublicTLS/auth/nativeBearer/persistencerestart/closedports and CodexbrowserUI. Update QA/AWSreadiness/diagrams and finalreceipts. Free mergedtests189/189passed;productionreleasechecks running. Profilecitadel-workbench;AWSbinary~/.local/share/citadel-tools/bin/aws. Ignoreddeploymenthelpers/secretaccessfiles are under.local/deployment.
+
 Local checkpoints automatic; never push/deploy without authorization. Free journey loop on. Standalone diagrams only. Browser QA stays in Codex. Live model QA build-wide cap US$3.
 
 ## Current state

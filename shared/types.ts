@@ -189,6 +189,8 @@ export interface Preflight {
   warnings: string[];
 }
 export interface RepoInfo {
+  executionAvailable?: boolean;
+  executionUnavailableReason?: string;
   sourceKind?: "upload";
   path: string;
   name: string;

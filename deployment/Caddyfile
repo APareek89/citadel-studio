@@ -1,0 +1,31 @@
+# Values come from /etc/agent-workbench/caddy.env through the systemd drop-in.
+# Caddy 2.8+; a public DNS name pointing at this host obtains TLS automatically.
+{$WORKBENCH_PUBLIC_ORIGIN} {
+  encode zstd gzip
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy no-referrer
+    X-Frame-Options DENY
+  }
+
+  # Only native ingestion bypasses browser login. The application still checks
+  # the project's independently issued Bearer token and the proxy trust token.
+  @native_ingest {
+    method POST
+    path_regexp native ^/api/telemetry/[A-Za-z0-9_-]+/spans$
+  }
+  handle @native_ingest {
+    reverse_proxy 127.0.0.1:3001 {
+      header_up X-Workbench-Proxy-Token {$WORKBENCH_PROXY_TOKEN}
+    }
+  }
+  handle {
+    basic_auth {
+      {$WORKBENCH_AUTH_USER} {$WORKBENCH_AUTH_HASH}
+    }
+    reverse_proxy 127.0.0.1:3001 {
+      header_up X-Workbench-Proxy-Token {$WORKBENCH_PROXY_TOKEN}
+      header_up -Authorization
+    }
+  }
+}

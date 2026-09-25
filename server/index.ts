@@ -27,7 +27,12 @@ import {
   runRedTeam,
 } from "./workflows.js";
 import { exportProject } from "./export.js";
-import { discoverRepo, readSource } from "./importer.js";
+import {
+  discoverRepo,
+  readSource,
+  importedExecutionAvailability,
+} from "./importer.js";
+import { hosting, validProxyToken } from "./hosting.js";
 import {
   listGithubRepos,
   checkoutGithub,
@@ -67,16 +72,30 @@ if (!development && !existsSync("dist/index.html")) {
   );
 }
 app.disable("x-powered-by");
+if (hosting.proxyToken) registerIntegrationSecret(hosting.proxyToken);
 app.use((req, res, next) => {
-  const host = req.headers.host?.split(":")[0];
-  if (!["127.0.0.1", "localhost"].includes(host || ""))
+  const host = req.headers.host;
+  if (hosting.publicOrigin) {
+    if (!validProxyToken(req.headers["x-workbench-proxy-token"]))
+      return res
+        .status(403)
+        .json({ error: "Authenticated proxy access required" });
+    if (host?.toLowerCase() !== hosting.publicHost)
+      return res.status(403).json({ error: "Unrecognized host" });
+  } else if (!["127.0.0.1", "localhost"].includes(host?.split(":")[0] || ""))
     return res.status(403).json({ error: "Localhost access only" });
   const origin = req.headers.origin;
   if (
     origin &&
-    ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(origin)
+    !(
+      hosting.publicOrigin
+        ? [hosting.publicOrigin]
+        : [`http://127.0.0.1:${port}`, `http://localhost:${port}`]
+    ).includes(origin)
   )
     return res.status(403).json({ error: "Cross-origin access denied" });
+  if (hosting.publicOrigin && req.headers["sec-fetch-site"] === "cross-site")
+    return res.status(403).json({ error: "Cross-site access denied" });
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
   if (req.path.startsWith("/api")) res.setHeader("Cache-Control", "no-store");
@@ -88,6 +107,26 @@ app.use((req, res, next) => {
   next();
 });
 setGithubRedactionHook(registerIntegrationSecret);
+// The proxy exposes this one ingestion route without browser Basic Auth.
+// Reject unknown receiver tokens before allocating/parsing a request body.
+app.use((req, res, next) => {
+  const native =
+    req.method === "POST" &&
+    req.path.match(/^\/api\/telemetry\/([A-Za-z0-9_-]+)\/spans$/);
+  if (native) {
+    try {
+      authorizeReceiver(native[1], req.headers.authorization);
+    } catch {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Telemetry token is missing, expired or belongs to another project.",
+        });
+    }
+  }
+  next();
+});
 app.use("/api/repos/upload", express.json({ limit: "16mb" }));
 app.use(express.json({ limit: "2mb" }));
 const configSchema = z.object({
@@ -127,10 +166,26 @@ app.get("/api/health", (_req, res) => {
 app.get("/api/bootstrap", async (_req, res) =>
   res.json({
     ...state,
+    projects: state.projects.map((project) => ({
+      ...project,
+      ...(project.repo
+        ? {
+            repo: {
+              ...project.repo,
+              ...importedExecutionAvailability(project.repo),
+            },
+          }
+        : {}),
+    })),
     credentials: credentials(),
     system: {
       docker: await dockerAvailable(),
-      localSecretsAvailable: existsSync(secretsPath),
+      localSecretsAvailable: !hosting.publicOrigin && existsSync(secretsPath),
+      hosting: {
+        mode: hosting.publicOrigin ? "hosted" : "local",
+        publicOrigin: hosting.publicOrigin,
+        localSource: !hosting.publicOrigin,
+      },
       spend: spendStatus(),
     },
   }),
@@ -221,9 +276,13 @@ app.post("/api/credentials", (req, res) => {
     .parse(req.body);
   res.json(addCredential(b.provider, b.label, b.key));
 });
-app.post("/api/credentials/import", (req, res) =>
-  res.json(importCredential(providerSchema.parse(req.body.provider))),
-);
+app.post("/api/credentials/import", (req, res) => {
+  if (hosting.publicOrigin)
+    return res.status(403).json({
+      error: "Host secret-file import is disabled. Add a session credential.",
+    });
+  res.json(importCredential(providerSchema.parse(req.body.provider)));
+});
 app.post("/api/credentials/:id/validate", async (req, res) => {
   const models = await discoverModels(req.params.id);
   res.json({
@@ -503,17 +562,19 @@ app.get("/api/repos/github", async (_req, res) =>
 );
 app.get("/api/repos/default", (_req, res) =>
   res.json({
-    path: path.join(
-      homedir(),
-      "Documents",
-      "Codex",
-      "2026-09-05",
-      "use",
-      "work",
-      "render-to-vercel",
-      "repos",
-      "agentic-learning-studio",
-    ),
+    path: hosting.publicOrigin
+      ? ""
+      : path.join(
+          homedir(),
+          "Documents",
+          "Codex",
+          "2026-09-05",
+          "use",
+          "work",
+          "render-to-vercel",
+          "repos",
+          "agentic-learning-studio",
+        ),
   }),
 );
 app.post("/api/repos/connect", async (req, res) => {
@@ -525,6 +586,11 @@ app.post("/api/repos/connect", async (req, res) => {
       config: configSchema.optional(),
     })
     .parse(req.body);
+  if (hosting.publicOrigin && !/^https:\/\//i.test(b.path))
+    return res.status(403).json({
+      error:
+        "Host filesystem imports are disabled. Connect GitHub or upload a folder.",
+    });
   const existing = b.projectId ? projectById(b.projectId) : undefined;
   const priorGraph = existing?.graph,
     priorRepo = existing?.repo;

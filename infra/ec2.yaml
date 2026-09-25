@@ -1,0 +1,180 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Single-owner Agent Workbench preview. HTTPS proxy only; SSM administration; encrypted local persistence.
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+  ImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+Resources:
+  Releases:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireReleasePackages
+            Status: Enabled
+            Prefix: releases/
+            ExpirationInDays: 14
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      Tags:
+        - Key: Project
+          Value: agent-workbench
+  ReleaseTransportPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Releases
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt Releases.Arn
+              - !Sub '${Releases.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: ReadOwnReleasePackages
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub '${Releases.Arn}/releases/*'
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+  WebIngress:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS app and HTTP ACME/redirect only. No SSH or application-port ingress.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: ACME HTTP challenge and redirect
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Authenticated HTTPS preview
+      Tags:
+        - Key: Project
+          Value: agent-workbench
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref ImageId
+      InstanceType: t3.micro
+      CreditSpecification:
+        CPUCredits: standard
+      IamInstanceProfile: !Ref InstanceProfile
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref WebIngress
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: agent-workbench
+        - Key: Project
+          Value: agent-workbench
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euo pipefail
+          dnf install -y nodejs22 nodejs22-npm git python3 tar gzip curl-minimal
+          systemctl enable --now amazon-ssm-agent
+          if [ ! -f /swapfile ]; then
+            fallocate -l 1G /swapfile
+            chmod 600 /swapfile
+            mkswap /swapfile
+            swapon /swapfile
+            printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
+          fi
+          install -d -m 0755 /opt/agent-workbench
+          touch /opt/agent-workbench/bootstrap-ready
+  WorkspaceVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !GetAtt Instance.AvailabilityZone
+      Size: 8
+      VolumeType: gp3
+      Encrypted: true
+      Tags:
+        - Key: Name
+          Value: agent-workbench-data
+        - Key: Project
+          Value: agent-workbench
+  WorkspaceAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref Instance
+      VolumeId: !Ref WorkspaceVolume
+      Device: /dev/sdf
+  Address:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Project
+          Value: agent-workbench
+  AddressAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref Instance
+      AllocationId: !GetAtt Address.AllocationId
+Outputs:
+  InstanceId:
+    Value: !Ref Instance
+  PublicIp:
+    Value: !Ref Address
+  ReleaseBucket:
+    Value: !Ref Releases
+  WorkspaceVolumeId:
+    Value: !Ref WorkspaceVolume
+  SecurityGroupId:
+    Value: !Ref WebIngress

@@ -11,6 +11,7 @@ import { state, projectById, id, now, save, journal } from "./store.js";
 import { safeObject, redact } from "./providers.js";
 import { registerIntegrationSecret } from "./integration-secrets.js";
 import { bus } from "./runs.js";
+import { hosting } from "./hosting.js";
 
 const identifier = z
   .string()
@@ -83,7 +84,7 @@ export const receiverEndpoint = (
   projectId: string,
   port = Number(process.env.PORT || 3001),
 ) =>
-  `http://127.0.0.1:${port}/api/telemetry/${encodeURIComponent(projectId)}/spans`;
+  `${hosting.publicOrigin || `http://127.0.0.1:${port}`}/api/telemetry/${encodeURIComponent(projectId)}/spans`;
 export function receiverStatus(projectId: string) {
   projectById(projectId);
   return {

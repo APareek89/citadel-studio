@@ -1,26 +1,28 @@
-%% 06 IMPLEMENTED export — PLANNED portability gate and phase-3 hosting
+%% 06 IMPLEMENTED export and release packaging — remote deployment acceptance is separate
 flowchart TD
-PROJECT["IMPLEMENTED · Selected project revision<br/>[DATA · versioned graph]<br/>in: saved manifest application<br/>out: cloned and validated export input"]:::data
-SUPPORTED{"IMPLEMENTED · Manifest-owned project?<br/>[FUNCTION]<br/>in: project ownership<br/>out: permit export or keep source in its repository"}:::dec
-EXPORT["IMPLEMENTED · Assemble runnable project<br/>[FUNCTION]<br/>in: supported graph and shared executor modules<br/>out: CLI source, dependencies, graph test and setup instructions"]:::fn
-FILTER["IMPLEMENTED · Filter private runtime data<br/>[FUNCTION]<br/>in: explicitly selected file set<br/>out: redacted graph, no node source paths, empty environment template"]:::fn
-ZIP["IMPLEMENTED · Package download<br/>[LIBRARY · archiver]<br/>in: selected files<br/>out: portable project ZIP, not a deployment"]:::data
-CHECK{"PLANNED · Automatic clean-directory readiness gate<br/>[FUNCTION]<br/>in: extracted package and compatible environment<br/>out: verified readiness or failure<br/>not enforced by the export endpoint today"}:::dec
-READY["PLANNED · Verified portable release<br/>[FUNCTION]<br/>in: clean install, graph checks and sample-run evidence<br/>out: readiness claim supported by that evidence"]:::term
-FAIL["PLANNED · Preserve portability failure<br/>[FUNCTION]<br/>in: install or execution failure<br/>out: actionable failure evidence"]:::term
-BLOCK["IMPLEMENTED · Reject source-owned export<br/>[FUNCTION]<br/>in: connected repository project<br/>out: explicit supported-boundary message"]:::term
-AWS["PLANNED · Hosted UI and bounded API<br/>[LIBRARY · AWS S3, CloudFront, Lambda]<br/>in: separately verified deployment build<br/>out: hosted service; no resources created yet"]:::data
-DB["PLANNED · Hosted accounts and project storage<br/>[LIBRARY · Cognito + DynamoDB]<br/>in: authorized user operations<br/>out: tenant-scoped durable data"]:::data
-RUNNER["PLANNED · Local runner bridge or hosted sandbox<br/>[FUNCTION]<br/>in: authorized source/code job<br/>out: isolated execution with explicit cost limits<br/>not supplied by static hosting or Lambda automatically"]:::fn
+PROJECT["Selected project revision<br/>[DATA · versioned graph]<br/>in: saved manifest application<br/>out: cloned and validated export input"]:::data
+SUPPORTED{"Manifest-owned project?<br/>[FUNCTION]<br/>in: project ownership<br/>out: permit export or keep source in its repository"}:::dec
+EXPORT["Assemble exported agent app<br/>[FUNCTION]<br/>in: supported graph and shared executor modules<br/>out: CLI/browser source, dependencies, graph test and README"]:::fn
+FILTER["Filter private runtime data<br/>[FUNCTION]<br/>in: explicit file set<br/>out: redacted graph, no node source paths, empty environment template"]:::fn
+ZIP["Package agent-app download<br/>[LIBRARY · archiver]<br/>in: selected files<br/>out: portable project ZIP; not the hosted workbench release"]:::data
+CHECK{"PLANNED · Automatic per-download readiness gate<br/>[FUNCTION]<br/>in: extracted package and compatible environment<br/>out: sample verification or failure<br/>not enforced by the export endpoint today"}:::dec
+READY["PLANNED · Record export readiness<br/>[FUNCTION]<br/>in: successful clean install and sample evidence<br/>out: readiness for this particular download"]:::term
+FAIL["PLANNED · Preserve export failure<br/>[FUNCTION]<br/>in: install or execution failure<br/>out: actionable failure evidence"]:::term
+BLOCK["Reject source-owned export<br/>[FUNCTION]<br/>in: connected repository project<br/>out: explicit supported-boundary message"]:::term
+SOURCE["Workbench source release<br/>[DATA · reviewed repository]<br/>in: approved workbench changes<br/>out: build inputs separate from user projects and keys"]:::data
+BUILD["Build production workbench<br/>[LIBRARY · TypeScript, Vite and esbuild]<br/>in: source and lockfile<br/>out: hashed frontend and Node22 ESM server<br/>production server uses node; no tsx or Vite at runtime"]:::data
+PACKAGE["Create release allowlist archive<br/>[FUNCTION]<br/>in: compiled server/UI, SDK, export sources and deploy templates<br/>out: tar.gz without local state, credentials or imported repositories"]:::fn
+SMOKE["Exercise isolated release package<br/>[FUNCTION · local release smoke test]<br/>in: extracted release and production dependencies<br/>out: startup, static import, export and SDK evidence<br/>provider fetches blocked; not remote AWS acceptance"]:::fn
+INSTALL["Validate and install approved release<br/>[FUNCTION · install-release.sh]<br/>in: archive plus private app/proxy environment files<br/>out: versioned release, atomic current symlink and restarted services<br/>see diagram 13; workspace storage separate from release"]:::fn
+ACCEPT["Verify deployed service separately<br/>[FUNCTION · operator acceptance]<br/>in: actual HTTPS, auth, network and persistence checks<br/>out: remote deployment receipt or retained failure<br/>local package tests alone cannot establish deployment success"]:::term
 PROJECT --> SUPPORTED
-SUPPORTED -->|"yes"| EXPORT --> FILTER --> ZIP
-SUPPORTED -->|"no"| BLOCK
-ZIP -.->|"required release QA, not automatic today"| CHECK
+SUPPORTED -->|"manifest"| EXPORT --> FILTER --> ZIP
+SUPPORTED -->|"source-owned"| BLOCK
+ZIP -.->|"future automatic endpoint gate"| CHECK
 CHECK -->|"passes"| READY
 CHECK -->|"fails"| FAIL
-READY -.->|"separate phase-3 work"| AWS
-AWS --> DB
-AWS -.->|"source/code execution needs separate design"| RUNNER
+SOURCE --> BUILD --> PACKAGE --> SMOKE
+SMOKE -->|"approved deployment; successful package checks"| INSTALL --> ACCEPT
 classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
 classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
 classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;

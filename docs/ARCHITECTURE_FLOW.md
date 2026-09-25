@@ -8,7 +8,7 @@ The user selected a standalone viewer; no in-app debug tab is included. The gene
 
 ## Current complete-flow verification boundary
 
-The latest free simulations carry state through whole customer journeys: Build API → accepted/edited graph → checks/cancellation → independent exported runner; private-source/upload → map recovery → source inspection → downloaded native helper and loopback Langfuse → diagnosis evidence → replacement/restart; and Model Lab/Evals/Red Team through mixed outcomes, versioned criteria and finite approved probes. Reported targeted receipts are 11 Build, 8 Connect and 14 assessment checks. The merged suite passes 181/181 and the production build passes. Provider traffic in these simulations is mocked in temporary workspaces. Separate production browser checks pass with external fetches blocked, including delayed plan/save controls. These checks do not establish live compatibility or model reasoning quality. Exact scope and later live acceptance belong to QA-REPORT.md.
+The preceding complete-flow milestone carried state through whole customer journeys: Build API → accepted/edited graph → checks/cancellation → independent exported runner; private-source/upload → map recovery → source inspection → downloaded native helper and loopback Langfuse → diagnosis evidence → replacement/restart; and Model Lab/Evals/Red Team through mixed outcomes, versioned criteria and finite approved probes. Reported targeted receipts are 11 Build, 8 Connect and 14 assessment checks. That milestone recorded 181/181 merged tests and a successful production build; subsequent hosted-boundary results are tracked separately in QA-REPORT.md. Provider traffic in these simulations is mocked in temporary workspaces. Separate production browser checks pass with external fetches blocked, including delayed plan/save controls. These checks do not establish live compatibility or model reasoning quality. Exact scope and later live acceptance belong to QA-REPORT.md.
 
 Diagram 05 now shows mutation ownership at publication: source-owned projects cannot use Build alignment, only the newest unchanged-target alignment may publish, suite updates require a real same-project prior ID, and behavioral proposals must validate before approval. A stale result cannot overwrite newer work; this does not cancel or refund an already dispatched call.
 
@@ -20,7 +20,7 @@ Diagram 12 shows the subsequent browser ownership fixes. Project changes reset p
 
 ## Source and export implementation
 
-GitHub acquisition accepts a validated personal access token held in server memory or the existing authenticated `gh` CLI login. The repository picker includes accessible public and private repositories; a strict HTTPS GitHub URL can also be supplied. The service clones into private managed storage before discovery. It disables inherited Git configuration, hooks, templates, filters and submodules, validates the origin and serializes concurrent publication. Existing managed checkouts are reused unchanged. Local paths and filtered folder uploads are separate acquisition options. Download or upload is not execution authorization.
+GitHub acquisition accepts a validated personal access token held in server memory or the existing authenticated `gh` CLI login. The repository picker includes accessible public and private repositories; a strict HTTPS GitHub URL can also be supplied. The service clones into private managed storage before discovery. It disables inherited Git configuration, hooks, templates, filters and submodules, validates the origin and serializes concurrent publication. Existing managed checkouts are reused unchanged. In local mode, selected local paths and filtered folder uploads are separate acquisition options. Hosted mode removes the host-filesystem path option and rejects direct path requests before reading files; GitHub-managed checkouts and reviewed folder uploads remain available. Download or upload is not execution authorization.
 
 Diagram 04 separates acquisition, source evidence, AI interpretation and the existing trusted execution adapter. Local TypeScript/JavaScript and isolated Python parsing extract bounded candidates without executing repository code. The selected small model groups scrubbed source evidence into at most 20 proposed workflow nodes; deterministic checks validate references and retain unassigned candidates in an unresolved coverage group. Hidden supporting files remain part of the source map. Static discovery remains available without inference. No source map promises exhaustive runtime coverage.
 
@@ -28,11 +28,23 @@ Diagrams 02 and 04 preserve the supported original adapter's structured-call con
 
 The structured-output correction passes 31 focused free checks, including three mocked provider calls through the original pinned overview sandbox, within the 181-test merged receipt. They verify transport and original output validation. The separate post-fix live overview completed and its one-case/five-assertion eval passed; see QA-REPORT.md for the retained initial failure, correction, scoped result and usage.
 
-Diagram 08 covers native JavaScript/Python instrumentation and manual Langfuse observations v2 import. The existing application runs in its own environment; it must reach the loopback receiver or already send observations to Langfuse. Integration keys are held in server memory and must be reconnected after restart. Langfuse imports remain partial snapshots, and span parent relationships do not establish data flow. See [CONNECTIONS.md](CONNECTIONS.md) for setup, URL restrictions, limits and examples.
+Diagram 08 covers native JavaScript/Python instrumentation and manual Langfuse observations v2 import. The existing application runs in its own environment; it must reach the loopback receiver in local mode, the configured HTTPS receiver in hosted mode, or already send observations to Langfuse. The hosted receiver uses the exact POST-only Caddy exception described in diagram 13 and still requires its own project Bearer token. Hosted Langfuse localhost addresses refer to the private server, not the user's computer. Integration keys are held in server memory and must be reconnected after restart. Langfuse imports remain partial snapshots, and span parent relationships do not establish data flow. See [CONNECTIONS.md](CONNECTIONS.md) for setup, URL restrictions, limits and examples.
 
 The manifest export now contains a CLI and a minimal local browser wrapper (`npm run serve`), alongside the shared graph executor, validation, dependencies and empty environment template. The support-app ZIP passed a clean-directory install, graph test and one live CLI sample. Diagram 06's planned **automatic** readiness gate remains accurate: the export endpoint does not run these checks for each download. The browser wrapper additionally passed free HTTP boundary and interrupted-upload regression checks. Interactive model-backed browser acceptance remains separate from the recorded CLI evidence. Source-owned imports are explicitly rejected by export.
 
 Current evidence, live-versus-mocked provider coverage, the inconclusive connected red-team probe and final UI checks are in [QA-REPORT.md](QA-REPORT.md).
+
+## Private single-owner hosting
+
+Diagram 13 records the implemented private-preview deployment path, replacing the earlier speculative Lambda/Cognito lane. The workbench is packaged as a hashed frontend and compiled Node22 server on one Linux EC2 instance, behind Caddy HTTPS and a single owner's Basic Auth login. This is one shared workspace with a perimeter login, not multi-tenant accounts or per-user authorization. The source templates, installer and local fixture evidence establish what is built; **remote deployment acceptance remains separate and is not claimed by these diagrams**. See [DEPLOYMENT.md](DEPLOYMENT.md), [AWS-READINESS.md](AWS-READINESS.md) and the deployment receipt owned by the root task.
+
+The infrastructure template permits only public ports 80 and 443; management uses Systems Manager, with no SSH or application-port ingress. The app itself binds `127.0.0.1:3001`. Hosted configuration requires the same exact HTTPS origin and a random private proxy token in the app and Caddy environments. Caddy preserves the public Host and original Origin, overwrites the private proxy-token header, and strips browser Basic Authorization before forwarding. The app independently requires the proxy token, exact configured Host, either absent or exact Origin, and non-cross-site Fetch Metadata. Forwarded-host headers cannot choose the allowed host. Development serving is rejected in hosted mode. This layered boundary still depends on installing and verifying the supplied authenticated proxy; setting an origin alone does not create a login system.
+
+Only the exact `POST /api/telemetry/[A-Za-z0-9_-]+/spans` route bypasses browser Basic Auth. Caddy preserves that request's Bearer header and injects the proxy token; the API then validates the separate token issued for that project and its bounded span payload. Every other method/path, including token issuance and SDK downloads, stays behind browser authentication. The proxy token is never returned in bootstrap data or copied into browser configuration.
+
+Hosted mode disables arbitrary host-path imports and automatic local-secret-file import. It supports GitHub and folder source acquisition, manifest workflows, bounded source review and incoming traces within their existing gates. Model and integration credentials are added through the authenticated app and stay in process memory. Imported execution capability is recomputed for the current platform, pinned revision and sandbox; the known Learning Studio adapter ID and source graph remain visible on Linux, but its macOS-only runner and behavioral probes are unavailable. Hosting does not add a generic remote source runner, Docker, or tenant identity.
+
+The release installer uses versioned code directories and an atomic `current` symlink; `/var/lib/agent-workbench` remains separate. `infra/ec2.yaml` declares a dedicated encrypted 8GiB gp3 workspace volume with both deletion and replacement retention, apart from the disposable encrypted root disk. Deployment acceptance must verify that the workspace path is actually on that volume; attachment alone is not a verified mount. Retention reduces accidental deletion during replacement or stack removal, but is not a backup, cross-AZ migration, or automatic recovery procedure. A service restart reopens saved snapshots, marks incomplete work interrupted without replay, and requires session credentials and receiver tokens to be re-added.
 
 ## Red-team capability boundary
 
@@ -58,6 +70,10 @@ New applications are manifest-owned; imported applications are source-owned. A r
 
 | Gate | Enforcer and threshold | Source |
 | --- | --- | --- |
+| Private hosted access | Production HTTPS origin, matching proxy token of 32–512 characters, exact Host, absent/exact Origin and no cross-site request; loopback app bind | `server/hosting.ts`, `server/index.ts`, `deployment/Caddyfile` |
+| Owner and native authentication | Caddy bcrypt Basic Auth for all ordinary routes; only exact native POST path bypasses it and still needs its scoped project Bearer token | `deployment/Caddyfile`, `server/telemetry.ts` |
+| Hosted capability gate | No direct host-path or local-secret import; imported execution rechecks pinned revision, runtime platform and sandbox before planning/running | `server/index.ts`, `server/importer.ts`, `server/runs.ts`, `server/workflows.ts` |
+| Hosted persistence | Separate encrypted 8GiB gp3 workspace volume, deletion/replacement Retain; mounted-store verification required during deployment | `infra/ec2.yaml`, `deployment/agent-workbench.service` |
 | Manifest graph structure | Zod: 1–80 nodes, at most 160 edges; only resource nodes may be hidden; output and feedback checks | `server/graph.ts` |
 | Alignment ownership | Manifest-owned target before inference; newest request plus unchanged graph/repo/brief/name/alignment before publication | `server/workflows.ts` |
 | Model/run input | Validated credential, available text model, non-empty input at most 40,000 characters | `server/runs.ts` |
@@ -93,37 +109,43 @@ These are implementation limits, not promises of exact provider billing or compl
 | Manifest execution | `03-manifest-runtime.mmd` | `server/graph.ts`, `server/runtime.ts`, `server/runs.ts`, `server/store.ts` |
 | Source acquisition/mapping | `04-imported-source.mmd` | `server/github.ts`, `server/uploads.ts`, `server/importer.ts`, `server/source-map.ts`, `server/semantic-map.ts`, `server/learning-runner.ts` |
 | Product modes | `05-product-modes.mmd` | `server/workflows.ts`, `web/App.tsx` |
-| Export/hosting | `06-export-hosting.mmd` | `server/export.ts`; automatic readiness gate and AWS remain planned |
+| Export/release packaging | `06-export-hosting.mmd` | `server/export.ts`, release build/package scripts, installer; automatic per-download readiness gate remains planned |
 | Code sandbox | `07-custom-code-sandbox.mmd` | `server/sandbox.ts` |
 | External observations | `08-external-observation.mmd` | `server/telemetry.ts`, `server/langfuse.ts`, `sdk/workbench-client.mjs`, `sdk/workbench-client.py` |
 | Graph presentation | `09-graph-presentation.mmd` | `web/graph-presentation.ts`, `web/App.tsx`, `web/styles.css` |
 | Source review | `10-source-review.mmd` | `server/source-review.ts`, `server/workflows.ts`, red-team API/UI |
 | Client consistency | `11-client-version.mmd` | `server/index.ts`, `web/App.tsx` |
 | Browser ownership | `12-ui-ownership.mmd` | `web/App.tsx` |
+| Private hosted preview | `13-private-hosting.mmd` | `server/hosting.ts`, API/capability gates, `deployment/`, `infra/ec2.yaml` |
 
 ## Diagrams
 
 <!-- diagram: 01-master.mmd -->
 
 ```mermaid
-%% 01 MASTER — local application and ownership boundaries
+%% 01 MASTER — local or private hosted application and ownership boundaries
 %% IMPLEMENTED means source inspected, not that every live journey has passed QA.
 flowchart TD
 UI["IMPLEMENTED · Five-mode workspace<br/>[LIBRARY · React + React Flow]<br/>in: user goal, graph edits, selected model<br/>out: same-origin API request<br/>project/model ownership gates: see diagram 12"]:::data
-VERSION["IMPLEMENTED · Detect newer published interface<br/>[FUNCTION]<br/>in: loaded entry and local health uiEntry<br/>out: user-controlled reload notice; no automatic refresh<br/>see diagram 11"]:::fn
-API["IMPLEMENTED · Local API boundary<br/>[FUNCTION]<br/>in: browser request on loopback<br/>out: local operation after Host, Origin and JSON checks"]:::fn
+VERSION["IMPLEMENTED · Detect newer published interface<br/>[FUNCTION]<br/>in: loaded entry and same-origin health uiEntry<br/>out: user-controlled reload notice; no automatic refresh<br/>see diagram 11"]:::fn
+HOST{"IMPLEMENTED · Serving mode?<br/>[FUNCTION]<br/>in: configured public origin or local mode<br/>out: private proxy route or loopback route"}:::dec
+PROXY["IMPLEMENTED · Private HTTPS access boundary<br/>[LIBRARY · Caddy]<br/>in: public request and browser login or native bearer path<br/>out: forwarded request with private proxy token<br/>single owner; see diagram 13; remote acceptance recorded separately"]:::data
+API["IMPLEMENTED · API trust boundary<br/>[FUNCTION]<br/>in: loopback request or authenticated-proxy request<br/>out: operation after exact Host, Origin and JSON checks<br/>hosted mode also requires private proxy token"]:::fn
 MODE{"IMPLEMENTED · Operation selection<br/>[FUNCTION]<br/>in: requested mode<br/>out: owning module"}:::dec
 ALIGN["IMPLEMENTED · Alignment and generation<br/>[AGENT · selected config.model]<br/>in: brief and answers<br/>out: questions, assumptions and graph<br/>see diagram 05"]:::agent
 RUN["IMPLEMENTED · Manifest execution<br/>[FUNCTION]<br/>in: graph snapshot and input<br/>out: invocation events and terminal result<br/>see diagram 03"]:::fn
-REPO["IMPLEMENTED · Source acquisition and mapping<br/>[FUNCTION]<br/>in: GitHub, local checkout or folder upload<br/>out: source evidence, interpreted map or supported adapter request<br/>see diagram 04"]:::fn
+REPO["IMPLEMENTED · Source acquisition and mapping<br/>[FUNCTION]<br/>in: GitHub or folder upload; local checkout only in local mode<br/>out: source evidence, interpreted map or supported adapter request<br/>see diagram 04"]:::fn
 OBSERVE["IMPLEMENTED · External trace ingestion<br/>[FUNCTION]<br/>in: native span token or Langfuse project keys<br/>out: recorded external spans; never app execution<br/>see diagram 08"]:::fn
 MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/>in: candidates, eval cases, approved source review or supported probes<br/>out: grouped run evidence or source-only findings<br/>see diagrams 05 and 10"]:::fn
 EXPORT["IMPLEMENTED · Portable project export<br/>[FUNCTION]<br/>in: supported project revision<br/>out: secret-free runnable ZIP<br/>see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway<br/>[FUNCTION]<br/>in: bounded request and credential ID<br/>out: model text and usage<br/>see diagram 02"]:::fn
-STORE["IMPLEMENTED · Local workspace and event journal<br/>[DATA · private JSON + JSONL]<br/>in: snapshots and redacted events<br/>out: restorable project and run history"]:::data
+STORE["IMPLEMENTED · Workspace and event journal<br/>[DATA · private JSON + JSONL]<br/>in: snapshots and redacted events<br/>out: restorable project and run history<br/>local disk or hosted retained EBS; see diagram 13"]:::data
 PRESENT["IMPLEMENTED · Present graph and recorded scope<br/>[FUNCTION]<br/>in: authoritative graph and node events<br/>out: local layout, source overview or external recorded path<br/>see diagram 09; no execution or graph rewrite"]:::fn
 RESULT["IMPLEMENTED · Inspect selected invocation<br/>[FUNCTION]<br/>in: recorded graph, input, output, status<br/>out: node detail and visible run state"]:::term
-UI --> API --> MODE
+UI --> HOST
+HOST -->|"local mode"| API
+HOST -->|"explicit hosted configuration"| PROXY --> API
+API --> MODE
 UI -.->|"visible production client; 30s or focus"| VERSION
 MODE -->|"Build alignment"| ALIGN
 MODE -->|"Build execution"| RUN
@@ -252,6 +274,8 @@ CATALOG["List accessible GitHub repositories<br/>[FUNCTION]<br/>in: validated ac
 URL["Validate GitHub identity<br/>[FUNCTION]<br/>in: HTTPS github.com owner/repository URL<br/>out: normalized identity; reject credentials, escapes and extra paths"]:::fn
 CLONE["Acquire or reuse managed checkout<br/>[FUNCTION]<br/>in: validated identity and per-repository lock<br/>out: verified local source directory<br/>shallow clone; 90-second deadline; 2MB CLI output cap"]:::fn
 ISOLATE["Enforce Git acquisition boundary<br/>[FUNCTION]<br/>in: checkout and origin/config checks<br/>out: source only; no hooks, filters, submodules or repo scripts<br/>existing checkouts preserved; atomic publication"]:::fn
+LOCAL{"Host filesystem import permitted?<br/>[FUNCTION]<br/>in: user-supplied local path and serving mode<br/>out: resolve path or reject before read<br/>hosted mode forbids local-path imports"}:::dec
+DENY["Reject host filesystem import<br/>[FUNCTION]<br/>in: hosted local-path request<br/>out: HTTP 403; use GitHub or folder upload"]:::term
 PATH["Resolve selected local checkout<br/>[FUNCTION]<br/>in: local or managed repository path<br/>out: canonical directory"]:::fn
 UPLOAD["Validate folder text upload<br/>[FUNCTION]<br/>in: portable relative paths and text<br/>out: private separate source copy plus skip counts<br/>at most 500 files, 900000 bytes each and 10 MiB total"]:::fn
 FILES["Discover source resources<br/>[FUNCTION]<br/>in: repository directory<br/>out: at most 500 files, depth at most 6<br/>excludes secrets, symlinks and generated/dependency folders"]:::fn
@@ -260,8 +284,8 @@ METHOD{"Mapping mode?<br/>[FUNCTION]<br/>in: user choice and model configuration
 MODEL["Interpret meaningful workflow stages<br/>[AGENT · selected small config.model]<br/>in: scrubbed excerpts and candidate evidence<br/>out: at most 20 proposed workflow stages"]:::agent
 VERIFY["Validate proposal coverage<br/>[FUNCTION]<br/>in: proposed nodes, references and relationships<br/>out: validated assignments; unknown candidates retained<br/>source paths/lines, unique IDs and valid edges checked"]:::fn
 MAP["Retain source-owned graph<br/>[DATA · versioned graph and coverage]<br/>in: validated interpretation or static candidates<br/>out: core workflow, hidden resources and unresolved disclosure<br/>inferred structure is not observed execution"]:::data
-TRUST{"Approved source and platform?<br/>[FUNCTION]<br/>in: adapter, pinned revision and 14 allowlisted files<br/>out: isolated execution or discovery only<br/>macOS sandbox-exec required"}:::dec
-OPAQUE["Retain discovery-only map<br/>[DATA · source references]<br/>in: unsupported or changed source<br/>out: coverage and opaque components; no execution"]:::term
+TRUST{"Approved source and platform?<br/>[FUNCTION]<br/>in: adapter, pinned revision and current runtime platform<br/>out: upfront execution capability; map and adapter ID retained<br/>macOS sandbox-exec required; Linux execution is unavailable"}:::dec
+OPAQUE["Retain non-executable source map<br/>[DATA · source references]<br/>in: unsupported host, revision or adapter<br/>out: source review and incoming traces still available<br/>known adapter ID does not grant runtime availability"]:::term
 GIT["Read exact committed source<br/>[FUNCTION]<br/>in: approved revision and source allowlist<br/>out: source matching current files<br/>replacement objects disabled; inherited GIT overrides removed"]:::fn
 BUNDLE["Bundle pinned overview with test shims<br/>[LIBRARY · esbuild]<br/>in: verified source, bridge, local libraries<br/>out: scratch runner without provider keys"]:::data
 OS["Start reviewed-source worker<br/>[LIBRARY · macOS sandbox-exec]<br/>in: scratch bundle and request<br/>out: constrained process with original local Zod validation<br/>no network, file writes or process fork; 256MB JS heap"]:::data
@@ -272,7 +296,9 @@ LLM["Execute mediated model call<br/>[AGENT · run.config.model]<br/>in: origina
 ART["Render isolated overview artifact<br/>[FUNCTION]<br/>in: original schema-validated overview<br/>out: original HTML and in-memory artifact; no DB or billing"]:::fn
 RESULT["Return overview result and trace<br/>[FUNCTION]<br/>in: artifact and observed invocation events<br/>out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
 CLEAN["Force-stop and remove scratch files<br/>[FUNCTION]<br/>in: error, cancellation or 120-second deadline<br/>out: terminated worker and preserved partial trace"]:::term
-SOURCE -->|"local path"| PATH
+SOURCE -->|"local path"| LOCAL
+LOCAL -->|"local serving mode"| PATH
+LOCAL -->|"hosted serving mode"| DENY
 SOURCE -->|"GitHub picker or private URL"| AUTH --> CATALOG --> URL
 SOURCE -->|"folder upload"| UPLOAD --> PATH
 URL --> CLONE --> ISOLATE --> PATH
@@ -372,29 +398,31 @@ classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 <!-- diagram: 06-export-hosting.mmd -->
 
 ```mermaid
-%% 06 IMPLEMENTED export — PLANNED portability gate and phase-3 hosting
+%% 06 IMPLEMENTED export and release packaging — remote deployment acceptance is separate
 flowchart TD
-PROJECT["IMPLEMENTED · Selected project revision<br/>[DATA · versioned graph]<br/>in: saved manifest application<br/>out: cloned and validated export input"]:::data
-SUPPORTED{"IMPLEMENTED · Manifest-owned project?<br/>[FUNCTION]<br/>in: project ownership<br/>out: permit export or keep source in its repository"}:::dec
-EXPORT["IMPLEMENTED · Assemble runnable project<br/>[FUNCTION]<br/>in: supported graph and shared executor modules<br/>out: CLI source, dependencies, graph test and setup instructions"]:::fn
-FILTER["IMPLEMENTED · Filter private runtime data<br/>[FUNCTION]<br/>in: explicitly selected file set<br/>out: redacted graph, no node source paths, empty environment template"]:::fn
-ZIP["IMPLEMENTED · Package download<br/>[LIBRARY · archiver]<br/>in: selected files<br/>out: portable project ZIP, not a deployment"]:::data
-CHECK{"PLANNED · Automatic clean-directory readiness gate<br/>[FUNCTION]<br/>in: extracted package and compatible environment<br/>out: verified readiness or failure<br/>not enforced by the export endpoint today"}:::dec
-READY["PLANNED · Verified portable release<br/>[FUNCTION]<br/>in: clean install, graph checks and sample-run evidence<br/>out: readiness claim supported by that evidence"]:::term
-FAIL["PLANNED · Preserve portability failure<br/>[FUNCTION]<br/>in: install or execution failure<br/>out: actionable failure evidence"]:::term
-BLOCK["IMPLEMENTED · Reject source-owned export<br/>[FUNCTION]<br/>in: connected repository project<br/>out: explicit supported-boundary message"]:::term
-AWS["PLANNED · Hosted UI and bounded API<br/>[LIBRARY · AWS S3, CloudFront, Lambda]<br/>in: separately verified deployment build<br/>out: hosted service; no resources created yet"]:::data
-DB["PLANNED · Hosted accounts and project storage<br/>[LIBRARY · Cognito + DynamoDB]<br/>in: authorized user operations<br/>out: tenant-scoped durable data"]:::data
-RUNNER["PLANNED · Local runner bridge or hosted sandbox<br/>[FUNCTION]<br/>in: authorized source/code job<br/>out: isolated execution with explicit cost limits<br/>not supplied by static hosting or Lambda automatically"]:::fn
+PROJECT["Selected project revision<br/>[DATA · versioned graph]<br/>in: saved manifest application<br/>out: cloned and validated export input"]:::data
+SUPPORTED{"Manifest-owned project?<br/>[FUNCTION]<br/>in: project ownership<br/>out: permit export or keep source in its repository"}:::dec
+EXPORT["Assemble exported agent app<br/>[FUNCTION]<br/>in: supported graph and shared executor modules<br/>out: CLI/browser source, dependencies, graph test and README"]:::fn
+FILTER["Filter private runtime data<br/>[FUNCTION]<br/>in: explicit file set<br/>out: redacted graph, no node source paths, empty environment template"]:::fn
+ZIP["Package agent-app download<br/>[LIBRARY · archiver]<br/>in: selected files<br/>out: portable project ZIP; not the hosted workbench release"]:::data
+CHECK{"PLANNED · Automatic per-download readiness gate<br/>[FUNCTION]<br/>in: extracted package and compatible environment<br/>out: sample verification or failure<br/>not enforced by the export endpoint today"}:::dec
+READY["PLANNED · Record export readiness<br/>[FUNCTION]<br/>in: successful clean install and sample evidence<br/>out: readiness for this particular download"]:::term
+FAIL["PLANNED · Preserve export failure<br/>[FUNCTION]<br/>in: install or execution failure<br/>out: actionable failure evidence"]:::term
+BLOCK["Reject source-owned export<br/>[FUNCTION]<br/>in: connected repository project<br/>out: explicit supported-boundary message"]:::term
+SOURCE["Workbench source release<br/>[DATA · reviewed repository]<br/>in: approved workbench changes<br/>out: build inputs separate from user projects and keys"]:::data
+BUILD["Build production workbench<br/>[LIBRARY · TypeScript, Vite and esbuild]<br/>in: source and lockfile<br/>out: hashed frontend and Node22 ESM server<br/>production server uses node; no tsx or Vite at runtime"]:::data
+PACKAGE["Create release allowlist archive<br/>[FUNCTION]<br/>in: compiled server/UI, SDK, export sources and deploy templates<br/>out: tar.gz without local state, credentials or imported repositories"]:::fn
+SMOKE["Exercise isolated release package<br/>[FUNCTION · local release smoke test]<br/>in: extracted release and production dependencies<br/>out: startup, static import, export and SDK evidence<br/>provider fetches blocked; not remote AWS acceptance"]:::fn
+INSTALL["Validate and install approved release<br/>[FUNCTION · install-release.sh]<br/>in: archive plus private app/proxy environment files<br/>out: versioned release, atomic current symlink and restarted services<br/>see diagram 13; workspace storage separate from release"]:::fn
+ACCEPT["Verify deployed service separately<br/>[FUNCTION · operator acceptance]<br/>in: actual HTTPS, auth, network and persistence checks<br/>out: remote deployment receipt or retained failure<br/>local package tests alone cannot establish deployment success"]:::term
 PROJECT --> SUPPORTED
-SUPPORTED -->|"yes"| EXPORT --> FILTER --> ZIP
-SUPPORTED -->|"no"| BLOCK
-ZIP -.->|"required release QA, not automatic today"| CHECK
+SUPPORTED -->|"manifest"| EXPORT --> FILTER --> ZIP
+SUPPORTED -->|"source-owned"| BLOCK
+ZIP -.->|"future automatic endpoint gate"| CHECK
 CHECK -->|"passes"| READY
 CHECK -->|"fails"| FAIL
-READY -.->|"separate phase-3 work"| AWS
-AWS --> DB
-AWS -.->|"source/code execution needs separate design"| RUNNER
+SOURCE --> BUILD --> PACKAGE --> SMOKE
+SMOKE -->|"approved deployment; successful package checks"| INSTALL --> ACCEPT
 classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
 classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
 classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
@@ -436,20 +464,24 @@ classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 %% 08 IMPLEMENTED — external observations, separate from source mapping and execution
 flowchart TD
 METHOD{"Trace connection?<br/>[FUNCTION]<br/>in: selected workbench project<br/>out: native receiver or manual Langfuse import"}:::dec
-TOKEN["Issue project receiver token<br/>[FUNCTION]<br/>in: explicit create or replace action<br/>out: loopback endpoint and token; replacement revokes prior token"]:::fn
+TOKEN["Issue project receiver token<br/>[FUNCTION]<br/>in: explicit create or replace action<br/>out: loopback or configured public HTTPS endpoint and token<br/>replacement revokes prior token"]:::fn
 WRAP["Configure existing app instrumentation<br/>[DATA · server environment and downloaded JS/Python helper]<br/>in: endpoint, token and actual app functions<br/>out: wrappers for real operations; no automatic code injection"]:::data
 APP["Execute in source application<br/>[FUNCTION]<br/>in: request handled by the existing app<br/>out: running, completed or failed spans<br/>workbench does not start or stop this app"]:::fn
-POST["Deliver native batch<br/>[FUNCTION]<br/>in: spans and project Bearer token<br/>out: authenticated local HTTP request<br/>helper timeout 3 seconds; app must reach local receiver"]:::fn
+POST["Deliver native batch<br/>[FUNCTION]<br/>in: spans and project Bearer token<br/>out: authenticated request to configured receiver<br/>helper timeout 3 seconds; source app must reach endpoint"]:::fn
+HOST{"Receiver serving mode?<br/>[FUNCTION]<br/>in: target endpoint and request<br/>out: direct local route or hosted ingress"}:::dec
+PROXY["Pass exact native-ingest proxy route<br/>[LIBRARY · Caddy]<br/>in: POST telemetry project spans path<br/>out: proxy token injected; project Bearer authorization preserved<br/>only this exact method/path bypasses browser Basic Auth<br/>see diagram 13"]:::data
 NATIVE{"Native batch valid?<br/>[FUNCTION]<br/>in: token, span identity, times and parents<br/>out: accept or reject<br/>200 spans / 1 MB batch; 1000 spans / 3 MB trace"}:::dec
-URL{"Langfuse base URL allowed?<br/>[FUNCTION]<br/>in: base URL without credentials/path/query<br/>out: allowed Cloud region or localhost<br/>HTTPS Cloud allowlist; local HTTP/HTTPS only"}:::dec
+URL{"Langfuse base URL allowed?<br/>[FUNCTION]<br/>in: base URL without credentials/path/query<br/>out: allowed Cloud region or localhost<br/>HTTPS Cloud allowlist; hosted localhost means server, not laptop"}:::dec
 KEYS["Validate Langfuse project access<br/>[FUNCTION]<br/>in: public/secret keys held in server memory<br/>out: connected project metadata"]:::fn
 SYNC["Request observation snapshot<br/>[FUNCTION]<br/>in: manual Sync recent traces action<br/>out: observations API v2 pages from preceding 24 hours<br/>at most 3 pages of 100; 12 seconds / 5 MB per response"]:::fn
 PARTIAL["Normalize partial observations<br/>[FUNCTION]<br/>in: source trace/span IDs and reported I/O/usage<br/>out: validated bounded trace snapshots<br/>time windows and missing parents remain disclosed"]:::fn
-RECORD["Persist redacted observation evidence<br/>[DATA · local runs and event journal]<br/>in: accepted native spans or imported observations<br/>out: source associations, status, input/output and reported usage"]:::data
+RECORD["Persist redacted observation evidence<br/>[DATA · runs and event journal on local disk or private server]<br/>in: accepted native spans or imported observations<br/>out: source associations, status, input/output and reported usage"]:::data
 VIEW["Inspect observed hierarchy<br/>[FUNCTION]<br/>in: stored external spans and optional source map<br/>out: node evidence; parent nesting is not proof of data flow"]:::term
 ERROR["Return explicit connection/import error<br/>[FUNCTION]<br/>in: bad token, URL, payload or dependency failure<br/>out: failure without executing imported code"]:::term
 RESTART["Reconnect after server restart<br/>[FUNCTION]<br/>in: cleared session integration credentials<br/>out: new receiver token or revalidated Langfuse keys<br/>saved observation evidence remains"]:::term
-METHOD -->|"native"| TOKEN --> WRAP --> APP --> POST --> NATIVE
+METHOD -->|"native"| TOKEN --> WRAP --> APP --> POST --> HOST
+HOST -->|"local endpoint"| NATIVE
+HOST -->|"hosted endpoint"| PROXY --> NATIVE
 NATIVE -->|"valid; completed native traces immutable"| RECORD
 NATIVE -->|"invalid"| ERROR
 METHOD -->|"Langfuse"| URL
@@ -625,6 +657,62 @@ classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
 classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 ```
 
+<!-- diagram: 13-private-hosting.mmd -->
+
+```mermaid
+%% 13 IMPLEMENTED private hosting boundary — deployment verification recorded separately
+flowchart TD
+ENV{"Hosted configuration valid?<br/>[FUNCTION · startup and installer]<br/>in: app and proxy environment files<br/>out: enabled hosted mode or startup failure<br/>exact HTTPS origin; matching random proxy token 32–512 chars;<br/>production build required; no dev serving"}:::dec
+NODE["Start one-owner workbench service<br/>[LIBRARY · Node22 and systemd]<br/>in: compiled release plus private environment<br/>out: unprivileged process listening only on 127.0.0.1:3001<br/>read-only system/home; private temp; 768MiB service memory"]:::data
+REQUEST["Request private workbench<br/>[DATA · browser or instrumented app]<br/>in: public HTTPS URL and relevant credential<br/>out: remote request; deployment archive excludes local keys and state"]:::data
+NETWORK["Apply AWS network boundary<br/>[LIBRARY · EC2 security group]<br/>in: public traffic to one Linux instance<br/>out: 80 for ACME/redirect and 443 for HTTPS<br/>no ingress on 22 or 3001; management uses SSM"]:::data
+TLS["Terminate HTTPS<br/>[LIBRARY · Caddy]<br/>in: configured public hostname and request<br/>out: encrypted-transport request at proxy<br/>certificate and reachability require remote verification"]:::data
+ROUTE{"Exact native ingest request?<br/>[FUNCTION · Caddy matcher]<br/>in: HTTP method and path<br/>out: scoped ingestion lane or browser authentication<br/>POST /api/telemetry/project-id/spans only"}:::dec
+AUTH{"Owner browser credentials valid?<br/>[LIBRARY · Caddy basic_auth]<br/>in: Basic authorization over TLS and bcrypt hash<br/>out: accepted request or HTTP 401"}:::dec
+WEB["Forward authenticated browser request<br/>[LIBRARY · Caddy reverse_proxy]<br/>in: accepted owner request<br/>out: original public Host/Origin and injected proxy token<br/>Basic Authorization stripped before Node"]:::data
+INGEST["Forward native request<br/>[LIBRARY · Caddy reverse_proxy]<br/>in: exact ingestion method/path<br/>out: injected proxy token and preserved project Bearer token<br/>browser password is not shared with instrumented apps"]:::data
+TRUST{"App trust boundary valid?<br/>[FUNCTION · hosting.ts and API middleware]<br/>in: proxy token, Host, Origin and Fetch Site<br/>out: dispatch or HTTP 403<br/>token digest constant-time compare; exact configured Host;<br/>Origin absent or exact; cross-site denied; forwarded Host ignored"}:::dec
+OP{"Application operation?<br/>[FUNCTION · API routing]<br/>in: accepted request and JSON body where required<br/>out: source/run operation or native-ingest validation"}:::dec
+BEARER{"Project telemetry token valid?<br/>[FUNCTION · authorizeReceiver]<br/>in: issued token for this project<br/>out: accepted bounded spans or HTTP 401<br/>proxy secret alone does not authorize native ingestion"}:::dec
+CAP["Enforce hosted capability boundary<br/>[FUNCTION · API, importer and preflight]<br/>in: requested operation and current platform<br/>out: GitHub/upload, manifest workflow, source review or observation<br/>host-path and local-key imports disabled; Linux source runner gated"]:::fn
+VAULT["Hold session model and integration keys<br/>[DATA · server process memory]<br/>in: authenticated configuration<br/>out: scoped calls; values absent from release and browser state<br/>restart requires keys and native token to be re-added"]:::data
+STORE["Write private workspace evidence<br/>[DATA · JSON snapshots, JSONL events and managed source]<br/>in: saved work and redacted run evidence<br/>out: /var/lib/agent-workbench; separate from versioned releases"]:::data
+VOLUME["Retain encrypted workspace disk<br/>[LIBRARY · AWS EBS gp3]<br/>in: separate 8GiB workspace volume and verified mount<br/>out: retained data across instance replacement or stack deletion<br/>DeletionPolicy and UpdateReplacePolicy Retain;<br/>root disk is separate and disposable"]:::data
+RESTART["Recover after service restart<br/>[FUNCTION · store recovery]<br/>in: saved workspace and incomplete runs<br/>out: reopened projects and explicit interrupted evidence<br/>no automatic side-effect replay; credentials remain absent"]:::fn
+RECEIPT["Verify instance and storage acceptance<br/>[FUNCTION · operator deployment checks]<br/>in: actual TLS/auth/network tests and workspace mount inspection<br/>out: deployment receipt or failure; not implied by source templates<br/>retained volume still needs recovery and backup operations"]:::term
+DENY["Reject at the failing boundary<br/>[FUNCTION]<br/>in: invalid setup, credentials, origin, method or unsupported operation<br/>out: startup failure or explicit HTTP error; no model dispatch"]:::term
+ENV -->|"valid"| NODE
+ENV -->|"invalid"| DENY
+REQUEST --> NETWORK --> TLS --> ROUTE
+ROUTE -->|"exact native POST path"| INGEST
+ROUTE -->|"every other request"| AUTH
+AUTH -->|"valid owner credentials"| WEB
+AUTH -->|"invalid or missing"| DENY
+WEB --> TRUST
+INGEST --> TRUST
+NODE -.->|"loopback listener; no public app port"| TRUST
+TRUST -->|"accepted"| OP
+TRUST -->|"invalid"| DENY
+OP -->|"native spans"| BEARER
+BEARER -->|"valid token and payload"| STORE
+BEARER -->|"invalid or missing token"| DENY
+OP -->|"ordinary authenticated API operation"| CAP
+CAP -->|"allowed saved work and results"| STORE
+CAP -->|"model/integration setup"| VAULT
+CAP -->|"host path, secret import or unsupported runner"| DENY
+STORE --> VOLUME
+VOLUME -->|"same verified mounted workspace"| RESTART
+RESTART --> NODE
+NODE -.-> RECEIPT
+VOLUME -.-> RECEIPT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+```
+
 ## Regeneration and validation
 
 After editing these Mermaid fences, mirror each block into its named `.mmd` file. Then run:
@@ -634,18 +722,18 @@ node /Users/macbook/.agents/skills/power-coding/scripts/validate-mmd.mjs docs/me
 node /Users/macbook/.agents/skills/power-coding/scripts/build-html.mjs docs/mermaid docs/architecture-flow.html
 ```
 
-The original seven-diagram snapshot passed Mermaid parsing and browser rendering; subsequent connection, graph and source-review snapshots passed the real Mermaid parser. This milestone updates diagrams 01/05 and adds client consistency and browser ownership in diagrams 11/12. **All 12 diagrams pass the real Mermaid parser**, canonical fences match their `.mmd` files, and the standalone viewer was regenerated. This is independent of application/browser acceptance; no browser was used for the documentation check. A successful parse alone does not establish readable layout. The viewer is a documentation artifact, not a runtime debug tab.
+The original seven-diagram snapshot passed parsing and browser rendering; the later twelve-diagram source/client snapshot passed the real Mermaid parser. The private-hosting update changes diagrams 01/04/06/08 and adds diagram 13. **All 13 diagrams pass the real Mermaid parser**, their canonical Markdown fences match the `.mmd` files, and the standalone viewer was regenerated using the skill scripts. Existing local parser dependencies were reused; no cloud, provider or browser call was made. A successful parse does not establish remote deployment acceptance or visual readability. The viewer is a standalone documentation artifact, not a runtime debug tab.
 
 ## Known boundaries
 
 - Metadata discovery is not proof of model inference compatibility; verified execution is a separate flag.
 - Phrase and schema checks cannot establish factual accuracy. Optional model judges remain fallible.
-- Local store permissions protect files from ordinary other-user access; this is not encrypted tenant storage.
+- Local filesystem permissions and hosted encrypted EBS protect different boundaries. The hosted preview still has one owner workspace; it is not per-tenant encrypted storage or multi-user authorization.
 - Candidate inventory, parsed files and model excerpts are bounded. Valid source references do not prove the model grouped every responsibility correctly. Hidden resources and unresolved coverage remain inspectable.
-- Native tracing covers only instrumented operations and requires receiver reachability. Manual Langfuse snapshots may omit parents or older spans; imported observations never execute the source application.
+- Native tracing covers only instrumented operations and requires receiver reachability plus a per-project token. The exact hosted POST exception bypasses only browser login, not receiver authorization. Manual Langfuse snapshots may omit parents or older spans; imported observations never execute the source application.
 - Source overview, external Recorded path and Full source context are display scopes, not different stored applications. A missing path edge means no matching observed relationship was recorded; the UI must not invent one from node timing or source proximity.
 - The trusted imported overview disables retrieval and external persistence; full lesson generation remains discovery-only. Its macOS policy permits scoped read access plus root-directory metadata needed by the loader; network, file writes and child-process creation are denied. It is a reviewed-source adapter, not a general hostile-code sandbox.
 - Source review is a bounded selected-model inspection of source, never target execution. Exact citations establish where quoted text came from, not that the risk is exploitable or that omitted code is safe. Whole selected-file hashes detect changes beyond supplied excerpts; unselected-file content is outside that guarantee. Behavioral specialists remain labelled probe concerns, not separate autonomous agents, and retain their adapter gate.
 - Export assembly and a clean-directory CLI sample are verified for the support app. The browser wrapper has free HTTP-boundary and abort-survival coverage; interactive model-backed browser acceptance is separate. The download endpoint does not automatically enforce a readiness gate for each download.
-- AWS configuration is ready, but cloud hosting, tenant identity and a remote runner/sandbox are not built. See [AWS-READINESS.md](AWS-READINESS.md).
+- Private single-owner hosting code, production packaging and infrastructure templates are implemented. Actual remote provisioning/TLS/authentication/storage acceptance belongs to the deployment receipt; these diagrams do not assert it has passed. Tenant identity, multi-user authorization and a generic remote source runner remain unbuilt. Retained EBS is not a backup or an automatic recovery mechanism. See [AWS-READINESS.md](AWS-READINESS.md).
 - Decisions and rejected alternatives are in [DECISIONS.md](DECISIONS.md).

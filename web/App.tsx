@@ -154,6 +154,11 @@ type Bootstrap = {
   system: {
     docker: boolean | { available: boolean };
     localSecretsAvailable: boolean;
+    hosting?: {
+      mode: "local" | "hosted";
+      publicOrigin?: string;
+      localSource: boolean;
+    };
   };
 };
 const EMPTY: Bootstrap = {
@@ -595,6 +600,7 @@ export default function App() {
     [reportId, setReportId] = useState("");
   const project = data.projects.find((p) => p.id === projectId),
     activeMode = MODES.find((m) => m.id === mode)!;
+  const isHosted = data.system.hosting?.mode === "hosted";
   const run = data.runs.find(
       (r) => r.id === runId && r.projectId === projectId,
     ),
@@ -627,7 +633,9 @@ export default function App() {
     run as (Run & { external?: ExternalEvidence }) | undefined
   )?.external;
   const canExecuteProject =
-    !isImported || project?.repo?.adapter === "learning-studio";
+    !isImported ||
+    (project?.repo?.adapter === "learning-studio" &&
+      project.repo.executionAvailable !== false);
   const observedGraph = useMemo(() => {
     if (view !== "observed" || !run) return graph;
     return externalRun && traceScope === "path"
@@ -767,7 +775,9 @@ export default function App() {
     setRedId("");
     setConfirmed(false);
     setRedMethod(
-      project.repo?.adapter === "discovery-only"
+      project.repo &&
+        (project.repo.adapter === "discovery-only" ||
+          project.repo.executionAvailable === false)
         ? "source-review"
         : "behavioral",
     );
@@ -1536,7 +1546,8 @@ export default function App() {
     selection,
   ]);
   function connectEdge(c: Connection) {
-    if (busy || isImported || view === "observed" || !c.source || !c.target) return;
+    if (busy || isImported || view === "observed" || !c.source || !c.target)
+      return;
     updateGraph((g) => ({
       ...g,
       edges: [
@@ -1898,9 +1909,10 @@ export default function App() {
             <div>
               <strong>Observe through instrumentation</strong>
               <p>
-                This source map has no execution adapter. Run your application
-                in its own environment and send native traces, or sync Langfuse
-                observations.
+                {project?.repo?.executionUnavailableReason ||
+                  "This source map has no execution adapter."}{" "}
+                Run your application in its own environment and send native
+                traces, or sync Langfuse observations.
               </p>
             </div>
             <button
@@ -3057,22 +3069,27 @@ export default function App() {
               ["local", "Local path"],
               ["upload", "Upload folder"],
             ] as const
-          ).map(([id, label]) => (
-            <button
-              className={sourceMethod === id ? "active" : ""}
-              aria-pressed={sourceMethod === id}
-              key={id}
-              onClick={() => {
-                setSourceMethod(id);
-                if (id === "local" && repoPath.startsWith("https://"))
-                  setRepoPath(repoDefault);
-                if (id === "github" && !repoPath.startsWith("https://"))
-                  setRepoPath("");
-              }}
-            >
-              {label}
-            </button>
-          ))}
+          )
+            .filter(
+              ([id]) =>
+                id !== "local" || data.system.hosting?.localSource !== false,
+            )
+            .map(([id, label]) => (
+              <button
+                className={sourceMethod === id ? "active" : ""}
+                aria-pressed={sourceMethod === id}
+                key={id}
+                onClick={() => {
+                  setSourceMethod(id);
+                  if (id === "local" && repoPath.startsWith("https://"))
+                    setRepoPath(repoDefault);
+                  if (id === "github" && !repoPath.startsWith("https://"))
+                    setRepoPath("");
+                }}
+              >
+                {label}
+              </button>
+            ))}
         </div>
         {sourceMethod === "github" ? (
           <>
@@ -3616,7 +3633,11 @@ await trace.run(() => trace.span(
             >
               <Field
                 label="Langfuse base URL"
-                hint="Official EU, US, JP or HIPAA cloud, or a localhost self-hosted v4 instance."
+                hint={
+                  isHosted
+                    ? "Use a supported Langfuse Cloud URL. A localhost URL refers to this private server, not your computer."
+                    : "Official EU, US, JP or HIPAA cloud, or a localhost self-hosted v4 instance."
+                }
               >
                 <input
                   type="url"
@@ -3954,8 +3975,7 @@ await trace.run(() => trace.span(
   }
   function RedTeam() {
     const plans = data.redPlans.filter((p) => p.projectId === projectId);
-    const behaviorAvailable =
-      !isImported || project?.repo?.adapter === "learning-studio";
+    const behaviorAvailable = canExecuteProject;
     const sourceMode =
       isImported && (!behaviorAvailable || redMethod === "source-review");
     const sourcePlan = red?.mode === "source-review";
@@ -4041,7 +4061,7 @@ await trace.run(() => trace.span(
                   <p>
                     {behaviorAvailable
                       ? "Behavioral coverage is limited to the inspected Learning Studio overview adapter."
-                      : "This app has a source map but no supported execution runner. Live traces let you observe runs; they do not enable behavioral probes. Source review can inspect its code now."}
+                      : `${project?.repo?.executionUnavailableReason || "This app has a source map but no supported execution runner."} Live traces let you observe runs; they do not enable behavioral probes. Source review can inspect its code now.`}
                   </p>
                 </div>
               )}
@@ -5416,7 +5436,7 @@ await trace.run(() => trace.span(
           </span>
         </a>
         <div className="workspace-label">
-          PERSONAL WORKSPACE <span className="local-badge">LOCAL</span>
+          PERSONAL WORKSPACE <span className="local-badge">{isHosted ? "PRIVATE" : "LOCAL"}</span>
         </div>
         <div className="project-picker">
           <select
@@ -5507,7 +5527,9 @@ await trace.run(() => trace.span(
           </div>
           <div className="local-status">
             <span className="dot" />
-            <span>Local workspace</span>
+            <span>
+              {isHosted ? "Private hosted workspace" : "Local workspace"}
+            </span>
             <span className="avatar">AP</span>
           </div>
         </div>
@@ -5532,7 +5554,8 @@ await trace.run(() => trace.span(
               <kbd>⌘ K</kbd>
             </button>
             <span className="privacy-tag">
-              <span className="dot" /> Local execution
+              <span className="dot" />{" "}
+              {isHosted ? "Private hosted workspace" : "Local execution"}
             </span>
             <button
               className="icon-button mobile-credential"
@@ -5654,7 +5677,9 @@ await trace.run(() => trace.span(
           <span>
             <span className="dot" />
             {busy ||
-              "Saved graphs and redacted run evidence stay on this device"}
+              (isHosted
+                ? "Saved graphs and redacted run evidence stay on your private server"
+                : "Saved graphs and redacted run evidence stay on this device")}
           </span>
           <span>
             {project

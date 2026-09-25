@@ -6,6 +6,8 @@ CATALOG["List accessible GitHub repositories<br/>[FUNCTION]<br/>in: validated ac
 URL["Validate GitHub identity<br/>[FUNCTION]<br/>in: HTTPS github.com owner/repository URL<br/>out: normalized identity; reject credentials, escapes and extra paths"]:::fn
 CLONE["Acquire or reuse managed checkout<br/>[FUNCTION]<br/>in: validated identity and per-repository lock<br/>out: verified local source directory<br/>shallow clone; 90-second deadline; 2MB CLI output cap"]:::fn
 ISOLATE["Enforce Git acquisition boundary<br/>[FUNCTION]<br/>in: checkout and origin/config checks<br/>out: source only; no hooks, filters, submodules or repo scripts<br/>existing checkouts preserved; atomic publication"]:::fn
+LOCAL{"Host filesystem import permitted?<br/>[FUNCTION]<br/>in: user-supplied local path and serving mode<br/>out: resolve path or reject before read<br/>hosted mode forbids local-path imports"}:::dec
+DENY["Reject host filesystem import<br/>[FUNCTION]<br/>in: hosted local-path request<br/>out: HTTP 403; use GitHub or folder upload"]:::term
 PATH["Resolve selected local checkout<br/>[FUNCTION]<br/>in: local or managed repository path<br/>out: canonical directory"]:::fn
 UPLOAD["Validate folder text upload<br/>[FUNCTION]<br/>in: portable relative paths and text<br/>out: private separate source copy plus skip counts<br/>at most 500 files, 900000 bytes each and 10 MiB total"]:::fn
 FILES["Discover source resources<br/>[FUNCTION]<br/>in: repository directory<br/>out: at most 500 files, depth at most 6<br/>excludes secrets, symlinks and generated/dependency folders"]:::fn
@@ -14,8 +16,8 @@ METHOD{"Mapping mode?<br/>[FUNCTION]<br/>in: user choice and model configuration
 MODEL["Interpret meaningful workflow stages<br/>[AGENT · selected small config.model]<br/>in: scrubbed excerpts and candidate evidence<br/>out: at most 20 proposed workflow stages"]:::agent
 VERIFY["Validate proposal coverage<br/>[FUNCTION]<br/>in: proposed nodes, references and relationships<br/>out: validated assignments; unknown candidates retained<br/>source paths/lines, unique IDs and valid edges checked"]:::fn
 MAP["Retain source-owned graph<br/>[DATA · versioned graph and coverage]<br/>in: validated interpretation or static candidates<br/>out: core workflow, hidden resources and unresolved disclosure<br/>inferred structure is not observed execution"]:::data
-TRUST{"Approved source and platform?<br/>[FUNCTION]<br/>in: adapter, pinned revision and 14 allowlisted files<br/>out: isolated execution or discovery only<br/>macOS sandbox-exec required"}:::dec
-OPAQUE["Retain discovery-only map<br/>[DATA · source references]<br/>in: unsupported or changed source<br/>out: coverage and opaque components; no execution"]:::term
+TRUST{"Approved source and platform?<br/>[FUNCTION]<br/>in: adapter, pinned revision and current runtime platform<br/>out: upfront execution capability; map and adapter ID retained<br/>macOS sandbox-exec required; Linux execution is unavailable"}:::dec
+OPAQUE["Retain non-executable source map<br/>[DATA · source references]<br/>in: unsupported host, revision or adapter<br/>out: source review and incoming traces still available<br/>known adapter ID does not grant runtime availability"]:::term
 GIT["Read exact committed source<br/>[FUNCTION]<br/>in: approved revision and source allowlist<br/>out: source matching current files<br/>replacement objects disabled; inherited GIT overrides removed"]:::fn
 BUNDLE["Bundle pinned overview with test shims<br/>[LIBRARY · esbuild]<br/>in: verified source, bridge, local libraries<br/>out: scratch runner without provider keys"]:::data
 OS["Start reviewed-source worker<br/>[LIBRARY · macOS sandbox-exec]<br/>in: scratch bundle and request<br/>out: constrained process with original local Zod validation<br/>no network, file writes or process fork; 256MB JS heap"]:::data
@@ -26,7 +28,9 @@ LLM["Execute mediated model call<br/>[AGENT · run.config.model]<br/>in: origina
 ART["Render isolated overview artifact<br/>[FUNCTION]<br/>in: original schema-validated overview<br/>out: original HTML and in-memory artifact; no DB or billing"]:::fn
 RESULT["Return overview result and trace<br/>[FUNCTION]<br/>in: artifact and observed invocation events<br/>out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
 CLEAN["Force-stop and remove scratch files<br/>[FUNCTION]<br/>in: error, cancellation or 120-second deadline<br/>out: terminated worker and preserved partial trace"]:::term
-SOURCE -->|"local path"| PATH
+SOURCE -->|"local path"| LOCAL
+LOCAL -->|"local serving mode"| PATH
+LOCAL -->|"hosted serving mode"| DENY
 SOURCE -->|"GitHub picker or private URL"| AUTH --> CATALOG --> URL
 SOURCE -->|"folder upload"| UPLOAD --> PATH
 URL --> CLONE --> ISOLATE --> PATH

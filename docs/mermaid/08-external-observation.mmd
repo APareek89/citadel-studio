@@ -1,20 +1,24 @@
 %% 08 IMPLEMENTED — external observations, separate from source mapping and execution
 flowchart TD
 METHOD{"Trace connection?<br/>[FUNCTION]<br/>in: selected workbench project<br/>out: native receiver or manual Langfuse import"}:::dec
-TOKEN["Issue project receiver token<br/>[FUNCTION]<br/>in: explicit create or replace action<br/>out: loopback endpoint and token; replacement revokes prior token"]:::fn
+TOKEN["Issue project receiver token<br/>[FUNCTION]<br/>in: explicit create or replace action<br/>out: loopback or configured public HTTPS endpoint and token<br/>replacement revokes prior token"]:::fn
 WRAP["Configure existing app instrumentation<br/>[DATA · server environment and downloaded JS/Python helper]<br/>in: endpoint, token and actual app functions<br/>out: wrappers for real operations; no automatic code injection"]:::data
 APP["Execute in source application<br/>[FUNCTION]<br/>in: request handled by the existing app<br/>out: running, completed or failed spans<br/>workbench does not start or stop this app"]:::fn
-POST["Deliver native batch<br/>[FUNCTION]<br/>in: spans and project Bearer token<br/>out: authenticated local HTTP request<br/>helper timeout 3 seconds; app must reach local receiver"]:::fn
+POST["Deliver native batch<br/>[FUNCTION]<br/>in: spans and project Bearer token<br/>out: authenticated request to configured receiver<br/>helper timeout 3 seconds; source app must reach endpoint"]:::fn
+HOST{"Receiver serving mode?<br/>[FUNCTION]<br/>in: target endpoint and request<br/>out: direct local route or hosted ingress"}:::dec
+PROXY["Pass exact native-ingest proxy route<br/>[LIBRARY · Caddy]<br/>in: POST telemetry project spans path<br/>out: proxy token injected; project Bearer authorization preserved<br/>only this exact method/path bypasses browser Basic Auth<br/>see diagram 13"]:::data
 NATIVE{"Native batch valid?<br/>[FUNCTION]<br/>in: token, span identity, times and parents<br/>out: accept or reject<br/>200 spans / 1 MB batch; 1000 spans / 3 MB trace"}:::dec
-URL{"Langfuse base URL allowed?<br/>[FUNCTION]<br/>in: base URL without credentials/path/query<br/>out: allowed Cloud region or localhost<br/>HTTPS Cloud allowlist; local HTTP/HTTPS only"}:::dec
+URL{"Langfuse base URL allowed?<br/>[FUNCTION]<br/>in: base URL without credentials/path/query<br/>out: allowed Cloud region or localhost<br/>HTTPS Cloud allowlist; hosted localhost means server, not laptop"}:::dec
 KEYS["Validate Langfuse project access<br/>[FUNCTION]<br/>in: public/secret keys held in server memory<br/>out: connected project metadata"]:::fn
 SYNC["Request observation snapshot<br/>[FUNCTION]<br/>in: manual Sync recent traces action<br/>out: observations API v2 pages from preceding 24 hours<br/>at most 3 pages of 100; 12 seconds / 5 MB per response"]:::fn
 PARTIAL["Normalize partial observations<br/>[FUNCTION]<br/>in: source trace/span IDs and reported I/O/usage<br/>out: validated bounded trace snapshots<br/>time windows and missing parents remain disclosed"]:::fn
-RECORD["Persist redacted observation evidence<br/>[DATA · local runs and event journal]<br/>in: accepted native spans or imported observations<br/>out: source associations, status, input/output and reported usage"]:::data
+RECORD["Persist redacted observation evidence<br/>[DATA · runs and event journal on local disk or private server]<br/>in: accepted native spans or imported observations<br/>out: source associations, status, input/output and reported usage"]:::data
 VIEW["Inspect observed hierarchy<br/>[FUNCTION]<br/>in: stored external spans and optional source map<br/>out: node evidence; parent nesting is not proof of data flow"]:::term
 ERROR["Return explicit connection/import error<br/>[FUNCTION]<br/>in: bad token, URL, payload or dependency failure<br/>out: failure without executing imported code"]:::term
 RESTART["Reconnect after server restart<br/>[FUNCTION]<br/>in: cleared session integration credentials<br/>out: new receiver token or revalidated Langfuse keys<br/>saved observation evidence remains"]:::term
-METHOD -->|"native"| TOKEN --> WRAP --> APP --> POST --> NATIVE
+METHOD -->|"native"| TOKEN --> WRAP --> APP --> POST --> HOST
+HOST -->|"local endpoint"| NATIVE
+HOST -->|"hosted endpoint"| PROXY --> NATIVE
 NATIVE -->|"valid; completed native traces immutable"| RECORD
 NATIVE -->|"invalid"| ERROR
 METHOD -->|"Langfuse"| URL

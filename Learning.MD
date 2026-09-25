@@ -186,3 +186,10 @@ Symptom: final staged review found Quick Find, Cmd+K and the brand link could ch
 Deepest why [state]: lock a shared navigation boundary as well as visible controls; keyboard and modal routes are still user journeys.
 Action: central navigation checks busy state; Quick Find/hidden-node actions and keyboard entry respect that state. The delayed production offline browser check kept Build/Review during brand click and Cmd+K while Save was pending, then opened Quick Find normally after completion. Intended completion callbacks retain their original operation context.
 Prevention: include alternate keyboard and modal entry points in race reviews, not only the primary sidebar path.
+
+## 2026-09-25 — Local assumptions needed explicit hosted boundaries
+Symptom: the locally trusted workbench could not safely be exposed by changing its bindaddress; the sourceexecutor also relies on macOS sandboxing.
+Why1: localhost-only request checks, localfilesystem/secretfile imports and platform-specific execution were part of the runtime contract.
+Deepest why [deployment design]: hosting changes trust and capabilities, not only the URL.
+Action: retain loopback binding behind an authenticated TLSproxy; require its secret and exact origin/host; disable hostfilesystem/keyfile imports; expose execution availability before submission. Package the compiledserver with production dependencies and prove upload/export with all providerfetches blocked. Use a separate retained encryptedvolume and mount dependency for persistence.
+Prevention: verify unauthenticated denial, nativeBearer exception, missinghostcapabilities, clean productioninstall and persistence on the realhost. Local success does not establish cloudacceptance; receipts live in QA-REPORT.md.

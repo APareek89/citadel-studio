@@ -20,6 +20,7 @@ import { id, now, state, save, projectById } from "./store.js";
 import { defaultGraph, validateGraph } from "./graph.js";
 import { boundedGenerator, makeBudget, startRun, waitRun } from "./runs.js";
 import { redact, safeObject, modelFor } from "./providers.js";
+import { importedExecutionAvailability } from "./importer.js";
 function json(text: string) {
   return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
 }
@@ -476,7 +477,9 @@ export async function planRedTeam(args: {
     );
   const mode =
     args.mode ||
-    (p.repo?.adapter === "discovery-only" ? "source-review" : "behavioral");
+    (p.repo && !importedExecutionAvailability(p.repo).executionAvailable
+      ? "source-review"
+      : "behavioral");
   if (mode !== "source-review" && mode !== "behavioral")
     throw new Error("Unsupported review mode.");
   const targetFingerprint = redTargetFingerprint(p);
@@ -534,7 +537,7 @@ export async function planRedTeam(args: {
     save();
     return plan;
   }
-  if (p.repo && p.repo.adapter !== "learning-studio")
+  if (p.repo && !importedExecutionAvailability(p.repo).executionAvailable)
     throw new Error(
       "Behavioral tests are unavailable for this application. Choose Source review to inspect its code; mapping and trace connections do not provide an execution runner.",
     );
@@ -594,7 +597,9 @@ export async function planRedTeam(args: {
       id: id("probe"),
       specialist: String(probe.specialist),
       input: String(probe.input).slice(0, 4000),
-      forbidden: String(probe.forbidden || "").trim().slice(0, 200),
+      forbidden: String(probe.forbidden || "")
+        .trim()
+        .slice(0, 200),
       description: String(probe.description).slice(0, 2000),
     })),
     findings: [],
@@ -617,7 +622,11 @@ export async function runRedTeam(
   const p = projectById(plan.projectId);
   assertRedTarget(plan, p);
   const mode = plan.mode || "behavioral";
-  if (mode === "behavioral" && p.repo && p.repo.adapter !== "learning-studio")
+  if (
+    mode === "behavioral" &&
+    p.repo &&
+    !importedExecutionAvailability(p.repo).executionAvailable
+  )
     throw new Error(
       "Behavioral tests are unavailable. Prepare a Source review plan instead.",
     );

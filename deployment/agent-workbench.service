@@ -1,0 +1,42 @@
+[Unit]
+Description=Agent Workbench private application service
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=/var/lib/agent-workbench
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=workbench
+Group=workbench
+WorkingDirectory=/opt/agent-workbench/current
+EnvironmentFile=/etc/agent-workbench/app.env
+ExecStart=/usr/bin/node /opt/agent-workbench/current/build-server/index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+KillMode=control-group
+UMask=0077
+StateDirectory=agent-workbench
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/agent-workbench
+MemoryMax=768M
+TasksMax=128
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

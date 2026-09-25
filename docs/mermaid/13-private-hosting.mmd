@@ -1,0 +1,51 @@
+%% 13 IMPLEMENTED private hosting boundary — deployment verification recorded separately
+flowchart TD
+ENV{"Hosted configuration valid?<br/>[FUNCTION · startup and installer]<br/>in: app and proxy environment files<br/>out: enabled hosted mode or startup failure<br/>exact HTTPS origin; matching random proxy token 32–512 chars;<br/>production build required; no dev serving"}:::dec
+NODE["Start one-owner workbench service<br/>[LIBRARY · Node22 and systemd]<br/>in: compiled release plus private environment<br/>out: unprivileged process listening only on 127.0.0.1:3001<br/>read-only system/home; private temp; 768MiB service memory"]:::data
+REQUEST["Request private workbench<br/>[DATA · browser or instrumented app]<br/>in: public HTTPS URL and relevant credential<br/>out: remote request; deployment archive excludes local keys and state"]:::data
+NETWORK["Apply AWS network boundary<br/>[LIBRARY · EC2 security group]<br/>in: public traffic to one Linux instance<br/>out: 80 for ACME/redirect and 443 for HTTPS<br/>no ingress on 22 or 3001; management uses SSM"]:::data
+TLS["Terminate HTTPS<br/>[LIBRARY · Caddy]<br/>in: configured public hostname and request<br/>out: encrypted-transport request at proxy<br/>certificate and reachability require remote verification"]:::data
+ROUTE{"Exact native ingest request?<br/>[FUNCTION · Caddy matcher]<br/>in: HTTP method and path<br/>out: scoped ingestion lane or browser authentication<br/>POST /api/telemetry/project-id/spans only"}:::dec
+AUTH{"Owner browser credentials valid?<br/>[LIBRARY · Caddy basic_auth]<br/>in: Basic authorization over TLS and bcrypt hash<br/>out: accepted request or HTTP 401"}:::dec
+WEB["Forward authenticated browser request<br/>[LIBRARY · Caddy reverse_proxy]<br/>in: accepted owner request<br/>out: original public Host/Origin and injected proxy token<br/>Basic Authorization stripped before Node"]:::data
+INGEST["Forward native request<br/>[LIBRARY · Caddy reverse_proxy]<br/>in: exact ingestion method/path<br/>out: injected proxy token and preserved project Bearer token<br/>browser password is not shared with instrumented apps"]:::data
+TRUST{"App trust boundary valid?<br/>[FUNCTION · hosting.ts and API middleware]<br/>in: proxy token, Host, Origin and Fetch Site<br/>out: dispatch or HTTP 403<br/>token digest constant-time compare; exact configured Host;<br/>Origin absent or exact; cross-site denied; forwarded Host ignored"}:::dec
+OP{"Application operation?<br/>[FUNCTION · API routing]<br/>in: accepted request and JSON body where required<br/>out: source/run operation or native-ingest validation"}:::dec
+BEARER{"Project telemetry token valid?<br/>[FUNCTION · authorizeReceiver]<br/>in: issued token for this project<br/>out: accepted bounded spans or HTTP 401<br/>proxy secret alone does not authorize native ingestion"}:::dec
+CAP["Enforce hosted capability boundary<br/>[FUNCTION · API, importer and preflight]<br/>in: requested operation and current platform<br/>out: GitHub/upload, manifest workflow, source review or observation<br/>host-path and local-key imports disabled; Linux source runner gated"]:::fn
+VAULT["Hold session model and integration keys<br/>[DATA · server process memory]<br/>in: authenticated configuration<br/>out: scoped calls; values absent from release and browser state<br/>restart requires keys and native token to be re-added"]:::data
+STORE["Write private workspace evidence<br/>[DATA · JSON snapshots, JSONL events and managed source]<br/>in: saved work and redacted run evidence<br/>out: /var/lib/agent-workbench; separate from versioned releases"]:::data
+VOLUME["Retain encrypted workspace disk<br/>[LIBRARY · AWS EBS gp3]<br/>in: separate 8GiB workspace volume and verified mount<br/>out: retained data across instance replacement or stack deletion<br/>DeletionPolicy and UpdateReplacePolicy Retain;<br/>root disk is separate and disposable"]:::data
+RESTART["Recover after service restart<br/>[FUNCTION · store recovery]<br/>in: saved workspace and incomplete runs<br/>out: reopened projects and explicit interrupted evidence<br/>no automatic side-effect replay; credentials remain absent"]:::fn
+RECEIPT["Verify instance and storage acceptance<br/>[FUNCTION · operator deployment checks]<br/>in: actual TLS/auth/network tests and workspace mount inspection<br/>out: deployment receipt or failure; not implied by source templates<br/>retained volume still needs recovery and backup operations"]:::term
+DENY["Reject at the failing boundary<br/>[FUNCTION]<br/>in: invalid setup, credentials, origin, method or unsupported operation<br/>out: startup failure or explicit HTTP error; no model dispatch"]:::term
+ENV -->|"valid"| NODE
+ENV -->|"invalid"| DENY
+REQUEST --> NETWORK --> TLS --> ROUTE
+ROUTE -->|"exact native POST path"| INGEST
+ROUTE -->|"every other request"| AUTH
+AUTH -->|"valid owner credentials"| WEB
+AUTH -->|"invalid or missing"| DENY
+WEB --> TRUST
+INGEST --> TRUST
+NODE -.->|"loopback listener; no public app port"| TRUST
+TRUST -->|"accepted"| OP
+TRUST -->|"invalid"| DENY
+OP -->|"native spans"| BEARER
+BEARER -->|"valid token and payload"| STORE
+BEARER -->|"invalid or missing token"| DENY
+OP -->|"ordinary authenticated API operation"| CAP
+CAP -->|"allowed saved work and results"| STORE
+CAP -->|"model/integration setup"| VAULT
+CAP -->|"host path, secret import or unsupported runner"| DENY
+STORE --> VOLUME
+VOLUME -->|"same verified mounted workspace"| RESTART
+RESTART --> NODE
+NODE -.-> RECEIPT
+VOLUME -.-> RECEIPT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;

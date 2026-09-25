@@ -21,6 +21,7 @@ import {
 import { validateGraph } from "./graph.js";
 import { dockerAvailable } from "./sandbox.js";
 import { executeGraph, BlockedError } from "./runtime.js";
+import { importedExecutionAvailability } from "./importer.js";
 export const bus = new EventEmitter();
 bus.setMaxListeners(100);
 const controllers = new Map<string, AbortController>();
@@ -157,11 +158,10 @@ export async function preflight(
       message: (e as Error).message,
     });
   }
-  if (repo?.adapter === "discovery-only")
+  if (repo && !importedExecutionAvailability(repo).executionAvailable)
     result.issues.push({
       code: "adapter_missing",
-      message:
-        "This repository is mapped only. Add a supported instrumentation adapter before running.",
+      message: importedExecutionAvailability(repo).executionUnavailableReason!,
     });
   if (
     graph.nodes.some((n) => n.tool === "code" && !n.hidden) &&

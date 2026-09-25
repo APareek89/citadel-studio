@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { mapGenericSources, sourceCategory } from "./source-map.js";
@@ -15,6 +16,21 @@ import type {
 const execFileAsync = promisify(execFile);
 export const LEARNING_REVISION = "5968d231fae50fa3364470fbf0377968630aff6d";
 export const LEARNING_REPO = "APareek89/agentic-learning-studio";
+export function importedExecutionAvailability(
+  repo: RepoInfo,
+  platform = process.platform,
+  sandboxAvailable = existsSync("/usr/bin/sandbox-exec"),
+) {
+  const reason =
+    repo.adapter !== "learning-studio"
+      ? "This repository has a source map but no supported execution adapter."
+      : repo.revision !== LEARNING_REVISION
+        ? "Execution requires the inspected Learning Studio revision."
+        : platform !== "darwin" || !sandboxAvailable
+          ? "The Learning Studio runner requires the macOS sandbox. This host supports source mapping, review and incoming traces only."
+          : undefined;
+  return { executionAvailable: !reason, executionUnavailableReason: reason };
+}
 const MAX_FILE_BYTES = 900_000;
 const excluded =
   /(^|\/)(?:\.git|node_modules|dist|build|coverage|\.next|\.venv|venv|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.local|\.cache|output|outputs|vendor|\.env[^/]*|[^/]*(?:secret|credential|access.?keys)[^/]*)(\/|$)/i;
@@ -179,6 +195,7 @@ export async function discoverRepo(
     limitations,
     sources: files.map((p) => ({ path: p, category: category(p) })),
   };
+  Object.assign(repo, importedExecutionAvailability(repo));
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const sourceNode = async (

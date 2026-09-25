@@ -1,0 +1,32 @@
+[Unit]
+Description=Caddy HTTPS boundary for Agent Workbench
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+ExecStart=/usr/local/bin/caddy run --config /etc/caddy/Caddyfile
+ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/caddy
+StateDirectory=caddy
+StateDirectoryMode=0700
+Environment=XDG_DATA_HOME=/var/lib/caddy
+Environment=XDG_CONFIG_HOME=/var/lib/caddy
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+Restart=on-failure
+RestartSec=5
+MemoryMax=192M
+
+[Install]
+WantedBy=multi-user.target

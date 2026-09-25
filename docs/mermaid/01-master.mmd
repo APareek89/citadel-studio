@@ -1,21 +1,26 @@
-%% 01 MASTER — local application and ownership boundaries
+%% 01 MASTER — local or private hosted application and ownership boundaries
 %% IMPLEMENTED means source inspected, not that every live journey has passed QA.
 flowchart TD
 UI["IMPLEMENTED · Five-mode workspace<br/>[LIBRARY · React + React Flow]<br/>in: user goal, graph edits, selected model<br/>out: same-origin API request<br/>project/model ownership gates: see diagram 12"]:::data
-VERSION["IMPLEMENTED · Detect newer published interface<br/>[FUNCTION]<br/>in: loaded entry and local health uiEntry<br/>out: user-controlled reload notice; no automatic refresh<br/>see diagram 11"]:::fn
-API["IMPLEMENTED · Local API boundary<br/>[FUNCTION]<br/>in: browser request on loopback<br/>out: local operation after Host, Origin and JSON checks"]:::fn
+VERSION["IMPLEMENTED · Detect newer published interface<br/>[FUNCTION]<br/>in: loaded entry and same-origin health uiEntry<br/>out: user-controlled reload notice; no automatic refresh<br/>see diagram 11"]:::fn
+HOST{"IMPLEMENTED · Serving mode?<br/>[FUNCTION]<br/>in: configured public origin or local mode<br/>out: private proxy route or loopback route"}:::dec
+PROXY["IMPLEMENTED · Private HTTPS access boundary<br/>[LIBRARY · Caddy]<br/>in: public request and browser login or native bearer path<br/>out: forwarded request with private proxy token<br/>single owner; see diagram 13; remote acceptance recorded separately"]:::data
+API["IMPLEMENTED · API trust boundary<br/>[FUNCTION]<br/>in: loopback request or authenticated-proxy request<br/>out: operation after exact Host, Origin and JSON checks<br/>hosted mode also requires private proxy token"]:::fn
 MODE{"IMPLEMENTED · Operation selection<br/>[FUNCTION]<br/>in: requested mode<br/>out: owning module"}:::dec
 ALIGN["IMPLEMENTED · Alignment and generation<br/>[AGENT · selected config.model]<br/>in: brief and answers<br/>out: questions, assumptions and graph<br/>see diagram 05"]:::agent
 RUN["IMPLEMENTED · Manifest execution<br/>[FUNCTION]<br/>in: graph snapshot and input<br/>out: invocation events and terminal result<br/>see diagram 03"]:::fn
-REPO["IMPLEMENTED · Source acquisition and mapping<br/>[FUNCTION]<br/>in: GitHub, local checkout or folder upload<br/>out: source evidence, interpreted map or supported adapter request<br/>see diagram 04"]:::fn
+REPO["IMPLEMENTED · Source acquisition and mapping<br/>[FUNCTION]<br/>in: GitHub or folder upload; local checkout only in local mode<br/>out: source evidence, interpreted map or supported adapter request<br/>see diagram 04"]:::fn
 OBSERVE["IMPLEMENTED · External trace ingestion<br/>[FUNCTION]<br/>in: native span token or Langfuse project keys<br/>out: recorded external spans; never app execution<br/>see diagram 08"]:::fn
 MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/>in: candidates, eval cases, approved source review or supported probes<br/>out: grouped run evidence or source-only findings<br/>see diagrams 05 and 10"]:::fn
 EXPORT["IMPLEMENTED · Portable project export<br/>[FUNCTION]<br/>in: supported project revision<br/>out: secret-free runnable ZIP<br/>see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway<br/>[FUNCTION]<br/>in: bounded request and credential ID<br/>out: model text and usage<br/>see diagram 02"]:::fn
-STORE["IMPLEMENTED · Local workspace and event journal<br/>[DATA · private JSON + JSONL]<br/>in: snapshots and redacted events<br/>out: restorable project and run history"]:::data
+STORE["IMPLEMENTED · Workspace and event journal<br/>[DATA · private JSON + JSONL]<br/>in: snapshots and redacted events<br/>out: restorable project and run history<br/>local disk or hosted retained EBS; see diagram 13"]:::data
 PRESENT["IMPLEMENTED · Present graph and recorded scope<br/>[FUNCTION]<br/>in: authoritative graph and node events<br/>out: local layout, source overview or external recorded path<br/>see diagram 09; no execution or graph rewrite"]:::fn
 RESULT["IMPLEMENTED · Inspect selected invocation<br/>[FUNCTION]<br/>in: recorded graph, input, output, status<br/>out: node detail and visible run state"]:::term
-UI --> API --> MODE
+UI --> HOST
+HOST -->|"local mode"| API
+HOST -->|"explicit hosted configuration"| PROXY --> API
+API --> MODE
 UI -.->|"visible production client; 30s or focus"| VERSION
 MODE -->|"Build alignment"| ALIGN
 MODE -->|"Build execution"| RUN
