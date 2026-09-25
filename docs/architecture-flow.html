@@ -26,6 +26,7 @@ MODES["IMPLEMENTED · Compare, eval and red-team coordination&lt;br/&gt;[FUNCTIO
 EXPORT["IMPLEMENTED · Portable project export&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: supported project revision&lt;br/&gt;out: secret-free runnable ZIP&lt;br/&gt;see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: bounded request and credential ID&lt;br/&gt;out: model text and usage&lt;br/&gt;see diagram 02"]:::fn
 STORE["IMPLEMENTED · Local workspace and event journal&lt;br/&gt;[DATA · private JSON + JSONL]&lt;br/&gt;in: snapshots and redacted events&lt;br/&gt;out: restorable project and run history"]:::data
+PRESENT["IMPLEMENTED · Present graph and recorded scope&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: authoritative graph and node events&lt;br/&gt;out: local layout, source overview or external recorded path&lt;br/&gt;see diagram 09; no execution or graph rewrite"]:::fn
 RESULT["IMPLEMENTED · Inspect selected invocation&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: recorded graph, input, output, status&lt;br/&gt;out: node detail and visible run state"]:::term
 UI --&gt; API --&gt; MODE
 MODE --&gt;|"Build alignment"| ALIGN
@@ -45,7 +46,7 @@ MODES --&gt; STORE
 ALIGN --&gt; STORE
 RUN --&gt; STORE
 REPO --&gt; STORE
-STORE --&gt; RESULT
+STORE --&gt; PRESENT --&gt; RESULT
 classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
 classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
 classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
@@ -312,6 +313,42 @@ SYNC -.-&gt;|"timeout, malformed or oversized response"| ERROR
 RECORD --&gt; VIEW
 TOKEN -.-&gt;|"session ends"| RESTART
 KEYS -.-&gt;|"session ends"| RESTART
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<h2>09 IMPLEMENTED — presentation only; final browser acceptance remains a separate QA gate</h2>
+<pre class="mermaid">%% 09 IMPLEMENTED — presentation only; final browser acceptance remains a separate QA gate
+flowchart TD
+VIEW{"Selected graph view?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: draft/source selection or recorded run&lt;br/&gt;out: authoritative graph snapshot"}:::dec
+DRAFT["Read application graph&lt;br/&gt;[DATA · current graph revision]&lt;br/&gt;in: selected project&lt;br/&gt;out: editable manifest or source-owned map"]:::data
+RUN["Read immutable run graph&lt;br/&gt;[DATA · recorded run and node events]&lt;br/&gt;in: selected run ID&lt;br/&gt;out: saved source context and actual invocation evidence"]:::data
+SCOPE{"External trace in Recorded path mode?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: external-run flag and path/context selection&lt;br/&gt;out: evidence projection or full context"}:::dec
+PATH["Project recorded activity&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: graph nodes referenced by real node events&lt;br/&gt;out: independent display graph and original observed edges&lt;br/&gt;no invented nodes, links or chronology"]:::fn
+LAYOUT["Lay out visible relationships&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: graph snapshot and card dimensions&lt;br/&gt;out: stable cycle/component coordinates and routing hints&lt;br/&gt;default at most 4 peer rows; original graph unchanged"]:::fn
+DETAIL{"Imported source overview?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: graph ownership, view and detail choice&lt;br/&gt;out: reduced source view or complete visible edge set"}:::dec
+PRIMARY["Select source overview relationships&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: original source edges and connected overview IDs&lt;br/&gt;out: existing primary relationships plus every explicit feedback edge"]:::fn
+ALL["Retain complete visible relationships&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: original edges for the chosen graph scope&lt;br/&gt;out: every visible edge ID, instruction and provenance&lt;br/&gt;parallel and feedback contracts retained"]:::fn
+CANVAS["Render graph exploration&lt;br/&gt;[LIBRARY · React Flow]&lt;br/&gt;in: presentation nodes, original edges and real node states&lt;br/&gt;out: overview/all, Fit, Focus, node jump and optional labels"]:::data
+FULL["Apply temporary viewport controls&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: fullscreen, inspector and keyboard actions&lt;br/&gt;out: expanded canvas or restored workspace&lt;br/&gt;nested modals retain focus priority"]:::fn
+SELECT["Resolve canonical selection&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: selected original node or edge ID&lt;br/&gt;out: source details or recorded invocation evidence"]:::fn
+EDIT{"Editable manifest draft?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: graph ownership and current/historical view&lt;br/&gt;out: permitted edit or read-only inspector"}:::dec
+SAVE["Update explicit draft configuration&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: user prompt, schema, code or connection edit&lt;br/&gt;out: changed draft; normal save creates next revision"]:::term
+INSPECT["Inspect preserved evidence&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: original source references or run events&lt;br/&gt;out: read-only source, input, output, status and invocation&lt;br/&gt;layout rank is not execution order or parallelism"]:::term
+VIEW --&gt;|"current design"| DRAFT --&gt; LAYOUT
+VIEW --&gt;|"recorded execution"| RUN --&gt; SCOPE
+SCOPE --&gt;|"external trace and Recorded path"| PATH --&gt; LAYOUT
+SCOPE --&gt;|"manifest run or Full source context"| LAYOUT
+LAYOUT --&gt; DETAIL
+DETAIL --&gt;|"yes; unobserved source overview only"| PRIMARY --&gt; CANVAS
+DETAIL --&gt;|"All connections, manifest or recorded scope"| ALL --&gt; CANVAS
+CANVAS --&gt; FULL
+CANVAS --&gt; SELECT --&gt; EDIT
+EDIT --&gt;|"yes; explicit edit only"| SAVE
+EDIT --&gt;|"source-owned or historical"| INSPECT
 classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
 classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
 classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;

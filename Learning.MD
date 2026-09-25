@@ -84,3 +84,29 @@ Why 2: tests covered simple string values and in-order lifecycle, but not repres
 Deepest why [design/testing]: validate semantic coverage, source identity and trace finality separately from convenient representations.
 Action: supply all parser-backed headers plus bounded DSL excerpts, cap 20 semantic groups, preserve unresolved references, deduplicate projected relationships; verify Git root ownership; retain upload names; require explicit native finalization; scrub whole files with line preservation and redact JSON keys.
 Prevention: source-preview, multiline/PEM, property-key collision, nested Git root and partial-batch regressions; stale mapping completions reject changes to a newer project connection.
+
+## 2026-09-25 — A complete source map was still messy to use
+Symptom: the user found the mapped graph difficult to follow and asked for a clean graph, fullscreen exploration and a real Demo Studio check. Accounting for 92 candidates in 16 nodes did not establish readable navigation.
+Why 1: many source relationships, provider fan-in and labels competed for attention in a constrained canvas.
+Why 2: one generic layout exposed the entire relationship set without a separate overview and deliberate inspection controls.
+Why 3: the implementation treated mapping coverage as the main acceptance test, although the product's promise is understanding and control.
+Why 4: fixture checks and candidate counts did not ask whether a person could follow the actual application's responsibilities, then inspect the relevant connection and output.
+Deepest why [design/process]: graph truth and graph presentation need separate contracts, and readability needs a customer journey using the real connected app.
+Action: a presentation-only helper lays out cycles, disconnected components and peer groups without mutating the source graph; overview, All connections, Fit/Focus, node jump, optional labels and fullscreen provide progressive detail. Twelve free helper checks pass. Browser acceptance is recorded in Loop.MD; runtime proof is tracked separately from source-map readability.
+Prevention: F10–F12 require actual Demo Studio navigation, complete edge inspection, immutable trace output and fullscreen keyboard/mobile checks. Never count candidate coverage or a screenshot alone as proof that the graph is usable.
+
+## 2026-09-25 — Simplifying arrows could hide execution contracts
+Symptom: review reproduced an overview showing only one of two feedback returns and an All connections count of seven with only six representative arrows.
+Why 1: endpoint deduplication and a spanning overview were applied to executable manifests and recorded runs as well as imported source maps.
+Why 2: presentation routing hints and compactness were allowed to substitute for the original edge list.
+Deepest why [design]: reducing visual clutter must never reduce editable execution contracts or claim runtime facts from layout geometry.
+Action: the tested selection contract restricts source simplification to an imported, unobserved source overview, always retains explicit feedback, and returns every original visible edge in All connections and executable-manifest views. Root verified fullscreen/overview, focus, responsive controls and revised-trace UI acceptance.
+Prevention: keep original IDs, instructions and provenance authoritative; test parallel edges, multiple feedback returns and historical evidence alongside visual packing. A return-shaped line is not automatically a feedback policy; nodes sharing a layout rank are not proof of parallel execution.
+
+## 2026-09-25 — An observed graph still exposed unexecuted source clutter
+Symptom: the new external trace showed 20 context nodes and 43 edges even though only five nodes had invocation events.
+Why 1: the trace correctly retained its whole source snapshot, but rendered that full context as the default activity view.
+Why 2: preserving context and presenting the recorded path were treated as the same requirement.
+Deepest why [design]: keep source context available while making the scope of actual observation explicit.
+Action: add an external-trace-only Recorded path projection from node events and original observed edges, alongside Full source context. Do not invent sequence edges from event timestamps. Four projection regressions pass; browser evidence shows 5 recorded nodes / 4 observed links versus 20 nodes / 43 context links, with real node I/O and stable arrow inspection. Packing the star into two peer rows made links pass behind cards and suggest a chain; restore four peer rows with a 28px gap.
+Prevention: test traces with many unvisited source nodes, disconnected observed operations and repeated invocations. Inspect routed arrows as well as non-overlapping rectangles: a tidy packing can still imply a false relationship. A projection changes what is shown, never the stored run graph or the meaning of its relationships.

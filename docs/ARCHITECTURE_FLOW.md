@@ -18,6 +18,14 @@ The manifest export now contains a CLI and a minimal local browser wrapper (`npm
 
 Current evidence, live-versus-mocked provider coverage, the inconclusive connected red-team probe and final UI checks are in [QA-REPORT.md](QA-REPORT.md).
 
+## Graph presentation and external recorded paths
+
+Diagram 09 separates visual exploration from the authoritative graph. The browser computes coordinates and overview selection locally; it does not remap source, invoke a model or rewrite execution rules. Imported source overview reduces secondary relationships while preserving workflow nodes, original provenance and explicit feedback. All connections and executable-manifest views retain every original visible relationship. Geometry describes a readable arrangement, not execution order or parallelism.
+
+For external traces, Recorded path projects nodes referenced by actual node events and retains only their original observed relationships. It may reveal a supporting node when that node actually emitted an event. Full source context restores the saved graph, including unvisited components; it does not imply they executed. Both are independent display copies or selections over immutable evidence. Fullscreen, Fit/Focus, node jump, optional labels and inspector visibility remain transient UI state. The 16 free presentation checks and final revised-control browser acceptance pass; exact scope and limits are in QA-REPORT.md.
+
+The separate [Demo Studio execution receipt](DEMO-STUDIO-RUN.md) records an isolated run of three original Python modules with one bounded live summary call. That reviewed QA harness uses fixture storage/config and a mediated model boundary. It does not add a general Demo Studio Run adapter or exercise the complete application. The ordinary imported-app execution path below remains narrowly gated to its supported adapter.
+
 ## Legend and ownership
 
 Blue: a model generates or judges. Green: deterministic code. Purple diamonds: conditions with a named enforcer. Pale purple: a library or data store. Cyan: a question returned to the user. Gray: terminal outcome. Each box declares its input and output. `config.model` names the model chosen for that run; there is no hard-coded universal model.
@@ -58,6 +66,7 @@ These are implementation limits, not promises of exact provider billing or compl
 | Export/hosting | `06-export-hosting.mmd` | `server/export.ts`; automatic readiness gate and AWS remain planned |
 | Code sandbox | `07-custom-code-sandbox.mmd` | `server/sandbox.ts` |
 | External observations | `08-external-observation.mmd` | `server/telemetry.ts`, `server/langfuse.ts`, `sdk/workbench-client.mjs`, `sdk/workbench-client.py` |
+| Graph presentation | `09-graph-presentation.mmd` | `web/graph-presentation.ts`, `web/App.tsx`, `web/styles.css` |
 
 ## Diagrams
 
@@ -78,6 +87,7 @@ MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/
 EXPORT["IMPLEMENTED · Portable project export<br/>[FUNCTION]<br/>in: supported project revision<br/>out: secret-free runnable ZIP<br/>see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway<br/>[FUNCTION]<br/>in: bounded request and credential ID<br/>out: model text and usage<br/>see diagram 02"]:::fn
 STORE["IMPLEMENTED · Local workspace and event journal<br/>[DATA · private JSON + JSONL]<br/>in: snapshots and redacted events<br/>out: restorable project and run history"]:::data
+PRESENT["IMPLEMENTED · Present graph and recorded scope<br/>[FUNCTION]<br/>in: authoritative graph and node events<br/>out: local layout, source overview or external recorded path<br/>see diagram 09; no execution or graph rewrite"]:::fn
 RESULT["IMPLEMENTED · Inspect selected invocation<br/>[FUNCTION]<br/>in: recorded graph, input, output, status<br/>out: node detail and visible run state"]:::term
 UI --> API --> MODE
 MODE -->|"Build alignment"| ALIGN
@@ -97,7 +107,7 @@ MODES --> STORE
 ALIGN --> STORE
 RUN --> STORE
 REPO --> STORE
-STORE --> RESULT
+STORE --> PRESENT --> RESULT
 classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
 classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
 classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
@@ -393,6 +403,45 @@ classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
 classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 ```
 
+<!-- diagram: 09-graph-presentation.mmd -->
+
+```mermaid
+%% 09 IMPLEMENTED — presentation only; final browser acceptance remains a separate QA gate
+flowchart TD
+VIEW{"Selected graph view?<br/>[FUNCTION]<br/>in: draft/source selection or recorded run<br/>out: authoritative graph snapshot"}:::dec
+DRAFT["Read application graph<br/>[DATA · current graph revision]<br/>in: selected project<br/>out: editable manifest or source-owned map"]:::data
+RUN["Read immutable run graph<br/>[DATA · recorded run and node events]<br/>in: selected run ID<br/>out: saved source context and actual invocation evidence"]:::data
+SCOPE{"External trace in Recorded path mode?<br/>[FUNCTION]<br/>in: external-run flag and path/context selection<br/>out: evidence projection or full context"}:::dec
+PATH["Project recorded activity<br/>[FUNCTION]<br/>in: graph nodes referenced by real node events<br/>out: independent display graph and original observed edges<br/>no invented nodes, links or chronology"]:::fn
+LAYOUT["Lay out visible relationships<br/>[FUNCTION]<br/>in: graph snapshot and card dimensions<br/>out: stable cycle/component coordinates and routing hints<br/>default at most 4 peer rows; original graph unchanged"]:::fn
+DETAIL{"Imported source overview?<br/>[FUNCTION]<br/>in: graph ownership, view and detail choice<br/>out: reduced source view or complete visible edge set"}:::dec
+PRIMARY["Select source overview relationships<br/>[FUNCTION]<br/>in: original source edges and connected overview IDs<br/>out: existing primary relationships plus every explicit feedback edge"]:::fn
+ALL["Retain complete visible relationships<br/>[FUNCTION]<br/>in: original edges for the chosen graph scope<br/>out: every visible edge ID, instruction and provenance<br/>parallel and feedback contracts retained"]:::fn
+CANVAS["Render graph exploration<br/>[LIBRARY · React Flow]<br/>in: presentation nodes, original edges and real node states<br/>out: overview/all, Fit, Focus, node jump and optional labels"]:::data
+FULL["Apply temporary viewport controls<br/>[FUNCTION]<br/>in: fullscreen, inspector and keyboard actions<br/>out: expanded canvas or restored workspace<br/>nested modals retain focus priority"]:::fn
+SELECT["Resolve canonical selection<br/>[FUNCTION]<br/>in: selected original node or edge ID<br/>out: source details or recorded invocation evidence"]:::fn
+EDIT{"Editable manifest draft?<br/>[FUNCTION]<br/>in: graph ownership and current/historical view<br/>out: permitted edit or read-only inspector"}:::dec
+SAVE["Update explicit draft configuration<br/>[FUNCTION]<br/>in: user prompt, schema, code or connection edit<br/>out: changed draft; normal save creates next revision"]:::term
+INSPECT["Inspect preserved evidence<br/>[FUNCTION]<br/>in: original source references or run events<br/>out: read-only source, input, output, status and invocation<br/>layout rank is not execution order or parallelism"]:::term
+VIEW -->|"current design"| DRAFT --> LAYOUT
+VIEW -->|"recorded execution"| RUN --> SCOPE
+SCOPE -->|"external trace and Recorded path"| PATH --> LAYOUT
+SCOPE -->|"manifest run or Full source context"| LAYOUT
+LAYOUT --> DETAIL
+DETAIL -->|"yes; unobserved source overview only"| PRIMARY --> CANVAS
+DETAIL -->|"All connections, manifest or recorded scope"| ALL --> CANVAS
+CANVAS --> FULL
+CANVAS --> SELECT --> EDIT
+EDIT -->|"yes; explicit edit only"| SAVE
+EDIT -->|"source-owned or historical"| INSPECT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+```
+
 ## Regeneration and validation
 
 After editing these Mermaid fences, mirror each block into its named `.mmd` file. Then run:
@@ -402,7 +451,7 @@ node /Users/macbook/.agents/skills/power-coding/scripts/validate-mmd.mjs docs/me
 node /Users/macbook/.agents/skills/power-coding/scripts/build-html.mjs docs/mermaid docs/architecture-flow.html
 ```
 
-The previous seven-diagram snapshot passed Mermaid parsing and Chromium rendering, with the master visually inspected. This source/connection update adds diagram 08 and changes diagrams 01 and 04. All eight diagrams pass the real Mermaid parser; the viewer was regenerated. No browser rendering or live connection check was performed during this documentation update. A successful parse alone does not establish readable layout. The viewer is a documentation artifact, not a runtime debug tab.
+The original seven-diagram snapshot passed Mermaid parsing and browser rendering; the eight-diagram connection snapshot passed the real Mermaid parser. This graph milestone adds diagram 09 and updates the master. **All nine diagrams pass the real Mermaid parser**, their Markdown fences match the `.mmd` sources, and the standalone viewer was regenerated. No browser was launched for this documentation check. A successful parse alone does not establish readable layout. The viewer is a documentation artifact, not a runtime debug tab.
 
 ## Known boundaries
 
@@ -411,6 +460,7 @@ The previous seven-diagram snapshot passed Mermaid parsing and Chromium renderin
 - Local store permissions protect files from ordinary other-user access; this is not encrypted tenant storage.
 - Candidate inventory, parsed files and model excerpts are bounded. Valid source references do not prove the model grouped every responsibility correctly. Hidden resources and unresolved coverage remain inspectable.
 - Native tracing covers only instrumented operations and requires receiver reachability. Manual Langfuse snapshots may omit parents or older spans; imported observations never execute the source application.
+- Source overview, external Recorded path and Full source context are display scopes, not different stored applications. A missing path edge means no matching observed relationship was recorded; the UI must not invent one from node timing or source proximity.
 - The trusted imported overview disables retrieval and external persistence; full lesson generation remains discovery-only. Its macOS policy permits scoped read access plus root-directory metadata needed by the loader; network, file writes and child-process creation are denied. It is a reviewed-source adapter, not a general hostile-code sandbox.
 - Red-team specialists currently label different planned probe concerns; the source review is deterministic heuristics and semantic review uses the selected model. Separate autonomous specialist agents are not implemented.
 - Export assembly and a clean-directory CLI sample are verified for the support app. The browser wrapper has free HTTP-boundary and abort-survival coverage; interactive model-backed browser acceptance is separate. The download endpoint does not automatically enforce a readiness gate for each download.

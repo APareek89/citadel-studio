@@ -5,6 +5,8 @@ import {
   Handle,
   Position,
   ReactFlow,
+  MarkerType,
+  type ReactFlowInstance,
   type Connection,
   type NodeProps,
   type Node as FlowNode,
@@ -32,6 +34,11 @@ import {
   Loader2,
   Moon,
   MoreHorizontal,
+  Maximize2,
+  Minimize2,
+  Scan,
+  PanelRight,
+  Focus,
   Play,
   Plus,
   Search,
@@ -65,6 +72,12 @@ import type {
   RunEvent,
   SourceRef,
 } from "../shared/types";
+
+import {
+  layoutGraph,
+  selectPresentationEdges,
+  recordedGraph,
+} from "./graph-presentation";
 
 type GitHubStatus = {
   connected: boolean;
@@ -372,91 +385,6 @@ function Modal({
     </div>
   );
 }
-function graphLayout(graph: Graph): Record<string, { x: number; y: number }> {
-  const visible = graph.nodes.filter((n) => !n.hidden),
-    ids = new Set(visible.map((n) => n.id)),
-    flow = graph.edges.filter(
-      (e) => e.kind === "data" && ids.has(e.source) && ids.has(e.target),
-    ),
-    ranks = new Map<string, number>();
-  const remaining = new Set(visible.map((n) => n.id));
-  for (let pass = 0; pass < visible.length; pass++) {
-    let progressed = false;
-    for (const node of visible) {
-      if (!remaining.has(node.id)) continue;
-      const incoming = flow.filter((e) => e.target === node.id);
-      if (incoming.every((e) => ranks.has(e.source))) {
-        ranks.set(
-          node.id,
-          incoming.length
-            ? Math.max(...incoming.map((e) => ranks.get(e.source)!)) + 1
-            : 0,
-        );
-        remaining.delete(node.id);
-        progressed = true;
-      }
-    }
-    if (!progressed) break;
-  }
-  // Lay out a spanning path through cycles; retain every original edge for rendering.
-  while (remaining.size) {
-    const candidates = visible.filter((node) => remaining.has(node.id));
-    const seed =
-      candidates.find((node) =>
-        flow.some((edge) => edge.target === node.id && ranks.has(edge.source)),
-      ) ||
-      candidates.find((node) => node.role === "orchestrator") ||
-      candidates[0];
-    const incomingRanks = flow
-      .filter((edge) => edge.target === seed.id && ranks.has(edge.source))
-      .map((edge) => ranks.get(edge.source)!);
-    ranks.set(
-      seed.id,
-      incomingRanks.length ? Math.max(...incomingRanks) + 1 : 0,
-    );
-    remaining.delete(seed.id);
-    const queue = [seed.id];
-    for (let index = 0; index < queue.length; index++) {
-      const current = queue[index];
-      for (const edge of flow) {
-        if (edge.source !== current || !remaining.has(edge.target)) continue;
-        ranks.set(edge.target, ranks.get(current)! + 1);
-        remaining.delete(edge.target);
-        queue.push(edge.target);
-      }
-    }
-  }
-  const connected = new Set(flow.flatMap((edge) => [edge.source, edge.target]));
-  const lanes = new Map<number, number>();
-  const placements = visible
-    .filter((node) => connected.has(node.id))
-    .map((node) => {
-      const rank = ranks.get(node.id) || 0,
-        lane = lanes.get(rank) || 0;
-      lanes.set(rank, lane + 1);
-      return { id: node.id, rank, lane };
-    });
-  // Wrap long workflows into six-column bands; graph semantics and saved positions stay intact.
-  const bandRows = Math.max(1, ...lanes.values());
-  const result: Record<string, { x: number; y: number }> = {};
-  for (const { id, rank, lane } of placements)
-    result[id] = {
-      x: (rank % 6) * 360,
-      y: 75 + (Math.floor(rank / 6) * bandRows + lane) * 230,
-    };
-  const isolatedTop = placements.length
-    ? Math.max(...Object.values(result).map((point) => point.y)) + 230
-    : 75;
-  visible
-    .filter((node) => !connected.has(node.id))
-    .forEach((node, index) => {
-      result[node.id] = {
-        x: (index % 4) * 360,
-        y: isolatedTop + Math.floor(index / 4) * 230,
-      };
-    });
-  return result;
-}
 function initialSelection(graph: Graph) {
   const node = graph.nodes.find((candidate) => !candidate.hidden);
   return node ? { type: "node" as const, id: node.id } : null;
@@ -522,7 +450,17 @@ function AgentNode({
     </div>
   );
 }
-const NODE_TYPES = { agent: AgentNode };
+function GraphSection({
+  data,
+}: NodeProps<FlowNode<{ node: GraphNode; state: string; count: number }>>) {
+  return (
+    <div className="graph-section-label">
+      <span>{data.node.label}</span>
+      <small>{data.node.description}</small>
+    </div>
+  );
+}
+const NODE_TYPES = { agent: AgentNode, section: GraphSection };
 
 export default function App() {
   const [data, setData] = useState<Bootstrap>(EMPTY),
@@ -547,6 +485,26 @@ export default function App() {
     null,
   );
   const sourceCodeRef = useRef<HTMLPreElement>(null);
+  const [graphExpanded, setGraphExpanded] = useState(false);
+  const [fullscreenInspector, setFullscreenInspector] = useState(false);
+  const [graphDetail, setGraphDetail] = useState<"overview" | "all">(
+    "overview",
+  );
+  const [graphLabels, setGraphLabels] = useState(false);
+  const [traceScope, setTraceScope] = useState<"path" | "context">("path");
+  const flowRef = useRef<
+    | (Pick<ReactFlowInstance, "setCenter" | "getViewport"> & {
+        fitView: (options?: {
+          padding?: number;
+          minZoom?: number;
+          maxZoom?: number;
+          duration?: number;
+        }) => Promise<boolean>;
+      })
+    | null
+  >(null);
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+  const graphWorkspaceRef = useRef<HTMLDivElement>(null);
   const [models, setModels] = useState<Record<string, Model[]>>({}),
     [config, setConfig] = useState<ModelConfig>({
       credentialId: "",
@@ -655,7 +613,26 @@ export default function App() {
   )?.external;
   const canExecuteProject =
     !isImported || project?.repo?.adapter === "learning-studio";
-  const observedGraph = view === "observed" && run ? run.graph : graph;
+  const observedGraph = useMemo(() => {
+    if (view !== "observed" || !run) return graph;
+    return externalRun && traceScope === "path"
+      ? recordedGraph(run.graph, run.events)
+      : run.graph;
+  }, [view, run, graph, externalRun, traceScope]);
+  useEffect(() => {
+    if (
+      view === "observed" &&
+      externalRun &&
+      traceScope === "path" &&
+      selection &&
+      !(selection.type === "node"
+        ? observedGraph?.nodes.some((node) => node.id === selection.id)
+        : observedGraph?.edges.some((edge) => edge.id === selection.id))
+    ) {
+      const first = observedGraph?.nodes[0];
+      setSelection(first ? { type: "node", id: first.id } : null);
+    }
+  }, [view, traceScope, observedGraph, externalRun, selection]);
   const running = !!run && !terminal(run),
     selectedNode = observedGraph?.nodes.find(
       (n) => selection?.type === "node" && n.id === selection.id,
@@ -1195,10 +1172,108 @@ export default function App() {
       </div>
     );
   }
+  const presentation = useMemo(
+    () =>
+      observedGraph
+        ? layoutGraph(
+            observedGraph,
+            externalRun && view === "observed" && traceScope === "path"
+              ? { parallelRows: 4, verticalGap: 28 }
+              : {},
+          )
+        : null,
+    [observedGraph, externalRun, view, traceScope],
+  );
+  const graphViewKey = `${observedGraph?.id}:${observedGraph?.revision}:${view}:${observedGraph?.nodes.length}`;
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void flowRef.current?.fitView({
+        padding: 0.14,
+        minZoom: 0.16,
+        maxZoom: 1,
+        duration: 250,
+      });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [graphViewKey, graphExpanded, fullscreenInspector]);
+  useEffect(() => {
+    setGraphDetail(project?.repo ? "overview" : "all");
+    setGraphExpanded(false);
+  }, [project?.id, mode, step]);
+  useEffect(() => {
+    if (!graphExpanded) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const childModalOpen =
+      sourcePreview || hiddenModal || searchModal || credentialModal;
+    const focusable = () =>
+      Array.from(
+        graphWorkspaceRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) || [],
+      ).filter((element) => element.getClientRects().length > 0);
+    const keepFocus = (event: FocusEvent) => {
+      if (
+        !childModalOpen &&
+        !graphWorkspaceRef.current?.contains(event.target as Node)
+      )
+        expandButtonRef.current?.focus();
+    };
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Tab" && !childModalOpen) {
+        const targets = focusable();
+        const first = targets[0],
+          last = targets.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+      if (
+        event.key === "Escape" &&
+        !sourcePreview &&
+        !hiddenModal &&
+        !searchModal &&
+        !credentialModal
+      ) {
+        setGraphExpanded(false);
+        requestAnimationFrame(() => expandButtonRef.current?.focus());
+      }
+    };
+    document.addEventListener("keydown", close);
+    document.addEventListener("focusin", keepFocus);
+    if (
+      !childModalOpen &&
+      !graphWorkspaceRef.current?.contains(document.activeElement)
+    )
+      expandButtonRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", close);
+      document.removeEventListener("focusin", keepFocus);
+    };
+  }, [graphExpanded, sourcePreview, hiddenModal, searchModal, credentialModal]);
+  function focusGraphNode(nodeId: string) {
+    const node = observedGraph?.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    setSelection({ type: "node", id: nodeId });
+    setEventId("");
+    const position =
+      (!isImported && view === "design" ? node.position : undefined) ||
+      presentation?.positions[nodeId];
+    if (position)
+      void flowRef.current?.setCenter(position.x + 122, position.y + 80, {
+        zoom: 1,
+        duration: 300,
+      });
+  }
   const nodes = useMemo(() => {
     if (!observedGraph) return [];
     const visible = observedGraph.nodes.filter((n) => !n.hidden),
-      layout = graphLayout(observedGraph);
+      layout = presentation?.positions || {};
     return visible.map((n, i) => {
       const events =
         run && view === "observed"
@@ -1218,7 +1293,9 @@ export default function App() {
       return {
         id: n.id,
         type: "agent",
-        position: n.position || layout[n.id],
+        position: (!isImported && view === "design" ? n.position : undefined) ||
+          layout[n.id] || { x: 0, y: 0 },
+        ariaLabel: `${n.label}, ${n.role}`,
         data: {
           node: n,
           state,
@@ -1227,31 +1304,113 @@ export default function App() {
         selected: selection?.type === "node" && selection.id === n.id,
       };
     });
-  }, [observedGraph, run, view, selection]);
+  }, [observedGraph, presentation, isImported, run, view, selection]);
+  const graphSections = useMemo(() => {
+    if (!presentation || !observedGraph || (!isImported && view === "design"))
+      return [];
+    return presentation.columns.map((column) => {
+      const members = observedGraph.nodes.filter((n) =>
+        column.nodeIds.includes(n.id),
+      );
+      const roles = new Set(members.map((n) => n.role));
+      const label =
+        view === "observed" && externalRun && traceScope === "path"
+          ? column.rank === 0
+            ? "Trace entry"
+            : "Observed components"
+          : roles.size === 1 && roles.has("orchestrator")
+            ? "Coordination"
+            : roles.size === 1 && roles.has("agent")
+              ? "Specialist agents"
+              : roles.size === 1 && roles.has("tool")
+                ? "Tools & services"
+                : column.rank === 0
+                  ? "Entry & coordination"
+                  : "Connected components";
+      const y =
+        Math.min(...column.nodeIds.map((id) => presentation.positions[id].y)) -
+        56;
+      return {
+        id: `presentation-column:${column.rank}`,
+        type: "section",
+        position: { x: column.x, y },
+        data: {
+          node: {
+            id: `column-${column.rank}`,
+            role: "resource" as const,
+            label,
+            description: column.parallel
+              ? "Related components"
+              : view === "observed"
+                ? "Recorded relationships"
+                : "Source relationships",
+          },
+          state: "pending",
+          count: 0,
+        },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        focusable: false,
+        zIndex: -1,
+        style: { width: column.width, height: 32 },
+      };
+    });
+  }, [presentation, observedGraph, isImported, view, externalRun, traceScope]);
   const edges = useMemo(() => {
-    if (!observedGraph) return [];
-    const ids = new Set(nodes.map((n) => n.id));
-    return observedGraph.edges
-      .filter((e) => ids.has(e.source) && ids.has(e.target))
-      .map((e) => ({
+    if (!observedGraph || !presentation) return [];
+    return selectPresentationEdges(
+      observedGraph,
+      presentation,
+      graphDetail,
+      isImported && view === "design",
+    ).map((e) => {
+      const feedback =
+        e.kind === "feedback" || presentation.feedbackEdgeIds.has(e.id);
+      const active = selection?.type === "edge" && selection.id === e.id;
+      return {
         id: e.id,
         source: e.source,
         target: e.target,
-        sourceHandle: e.kind === "feedback" ? "feedback-out" : "flow-out",
-        targetHandle: e.kind === "feedback" ? "feedback-in" : "flow-in",
-        label: e.label.length > 23 ? e.label.slice(0, 22) + "…" : e.label,
+        sourceHandle: feedback ? "feedback-out" : "flow-out",
+        targetHandle: feedback ? "feedback-in" : "flow-in",
+        label: graphLabels || active ? e.label : undefined,
         ariaLabel: e.label,
         type: "smoothstep",
-        animated: view === "observed" && running,
-        style: {
-          stroke: e.kind === "feedback" ? "var(--purple)" : "var(--edge)",
-          strokeDasharray: e.kind === "feedback" ? "5 4" : undefined,
+        pathOptions: { borderRadius: 18, offset: 28 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: feedback ? "var(--purple)" : "var(--edge)",
+          width: 16,
+          height: 16,
         },
-        labelStyle: { fill: "var(--muted)", fontSize: 12 },
-        labelBgStyle: { fill: "var(--canvas)" },
-        selected: selection?.type === "edge" && selection.id === e.id,
-      }));
-  }, [observedGraph, nodes, view, running, selection]);
+        animated: view === "observed" && running && e.provenance === "observed",
+        style: {
+          stroke: feedback ? "var(--purple)" : "var(--edge)",
+          strokeWidth: active ? 2.3 : 1.5,
+          strokeDasharray: feedback
+            ? "5 5"
+            : e.provenance === "inferred"
+              ? "4 4"
+              : undefined,
+        },
+        labelStyle: { fill: "var(--text)", fontSize: 11 },
+        labelBgStyle: { fill: "var(--card)", fillOpacity: 0.96 },
+        labelBgPadding: [7, 4] as [number, number],
+        labelBgBorderRadius: 5,
+        selected: active,
+      };
+    });
+  }, [
+    observedGraph,
+    presentation,
+    graphDetail,
+    graphLabels,
+    isImported,
+    view,
+    running,
+    selection,
+  ]);
   function connectEdge(c: Connection) {
     if (isImported || view === "observed" || !c.source || !c.target) return;
     updateGraph((g) => ({
@@ -1272,6 +1431,21 @@ export default function App() {
   }
   const graphPanel = (
     <div className="graph-panel">
+      {graphExpanded && (
+        <div className="expanded-graph-heading">
+          <div>
+            <span className="eyebrow">
+              {view === "observed"
+                ? "RECORDED EXECUTION"
+                : "APPLICATION STRUCTURE"}
+            </span>
+            <h2>{project?.name}</h2>
+          </div>
+          <span className="small muted">
+            Select a node to explore · Esc to exit
+          </span>
+        </div>
+      )}
       <div className="graph-toolbar">
         <div className="segmented">
           <button
@@ -1292,6 +1466,48 @@ export default function App() {
         <div className="toolbar-actions">
           <button
             className="button subtle small"
+            onClick={() => {
+              void flowRef.current?.fitView({
+                padding: 0.14,
+                minZoom: 0.16,
+                maxZoom: 1,
+                duration: 250,
+              });
+            }}
+            title="Fit the complete graph into view"
+          >
+            <Scan size={15} /> Fit graph
+          </button>
+          <button
+            className="button subtle small"
+            onClick={() => focusGraphNode(selectedNode?.id || nodes[0]?.id)}
+            disabled={!nodes.length}
+            title="Show the selected node at readable size"
+          >
+            <Focus size={15} /> Focus node
+          </button>
+          {graphExpanded && (
+            <button
+              className={`button subtle small ${fullscreenInspector ? "active" : ""}`}
+              aria-pressed={fullscreenInspector}
+              onClick={() => setFullscreenInspector((v) => !v)}
+            >
+              <PanelRight size={15} /> Inspector
+            </button>
+          )}
+          <button
+            ref={expandButtonRef}
+            className="button small graph-expand"
+            aria-label={
+              graphExpanded ? "Exit full screen" : "Full screen graph"
+            }
+            onClick={() => setGraphExpanded((v) => !v)}
+          >
+            {graphExpanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}{" "}
+            {graphExpanded ? "Exit full screen" : "Full screen"}
+          </button>
+          <button
+            className="button subtle small hidden-resources-button"
             onClick={() => setHiddenModal(true)}
           >
             <Layers3 size={14} /> Hidden nodes{" "}
@@ -1331,30 +1547,124 @@ export default function App() {
           )}
         </div>
       </div>
-      <div className="graph-caption">
-        {view === "observed" && run ? (
-          <>
-            Recorded graph r{run.graph.revision} · {run.events.length} events ·{" "}
-            <Status value={run.status} />
-          </>
-        ) : isImported ? (
-          <>
-            Source revision {project?.repo?.revision.slice(0, 8)} ·
-            relationships labelled by evidence
-          </>
+      <div className="graph-view-options">
+        {view === "observed" && externalRun ? (
+          <div
+            className="segmented"
+            role="group"
+            aria-label="Observed graph scope"
+          >
+            <button
+              className={traceScope === "path" ? "active" : ""}
+              aria-pressed={traceScope === "path"}
+              onClick={() => setTraceScope("path")}
+            >
+              Recorded path
+            </button>
+            <button
+              className={traceScope === "context" ? "active" : ""}
+              aria-pressed={traceScope === "context"}
+              onClick={() => setTraceScope("context")}
+            >
+              Full source context
+            </button>
+          </div>
         ) : (
-          <>
-            Application graph{" "}
-            <span>
-              r{graph?.revision} {dirty ? "· unsaved changes" : ""}
-            </span>
-          </>
+          <div
+            className="segmented"
+            role="group"
+            aria-label="Graph connection detail"
+          >
+            <button
+              className={
+                isImported && view === "design" && graphDetail === "overview"
+                  ? "active"
+                  : ""
+              }
+              aria-pressed={
+                isImported && view === "design" && graphDetail === "overview"
+              }
+              disabled={!isImported || view !== "design"}
+              title="Simplify an imported source map. Executable and recorded graphs retain every connection."
+              onClick={() => setGraphDetail("overview")}
+            >
+              Structure overview
+            </button>
+            <button
+              className={
+                !isImported || view !== "design" || graphDetail === "all"
+                  ? "active"
+                  : ""
+              }
+              aria-pressed={
+                !isImported || view !== "design" || graphDetail === "all"
+              }
+              onClick={() => setGraphDetail("all")}
+            >
+              All connections{" "}
+              <span className="count">{presentation?.totalEdgeCount || 0}</span>
+            </button>
+          </div>
         )}
+        <select
+          aria-label="Jump to graph node"
+          value={
+            selection?.type === "node" &&
+            nodes.some((n) => n.id === selection.id)
+              ? selection.id
+              : ""
+          }
+          onChange={(event) => focusGraphNode(event.target.value)}
+        >
+          <option value="">Jump to a node…</option>
+          {nodes.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.data.node.label}
+            </option>
+          ))}
+        </select>
+        <label className="graph-label-toggle">
+          <input
+            type="checkbox"
+            checked={graphLabels}
+            onChange={(e) => setGraphLabels(e.target.checked)}
+          />
+          Edge labels
+        </label>
+      </div>
+      <div className="graph-caption">
+        <span>
+          {view === "observed" && run ? (
+            <>
+              Recorded r{run.graph.revision} · <Status value={run.status} />
+            </>
+          ) : isImported ? (
+            <>Source · {project?.repo?.revision.slice(0, 8)}</>
+          ) : (
+            <>
+              Draft r{graph?.revision}
+              {dirty ? " · unsaved" : ""}
+            </>
+          )}
+        </span>
+        <span>
+          {isImported && view === "design" && graphDetail === "overview"
+            ? "Primary relationships · other connections remain available"
+            : view === "observed"
+              ? externalRun && traceScope === "path"
+                ? "Only recorded nodes and links · parent links show trace context, not timing"
+                : "Full graph context · source links do not prove execution"
+              : "All relationships · select an arrow for details"}
+        </span>
       </div>
       <div className="flow-wrap">
         <ReactFlow
-          nodes={nodes}
+          key={`${observedGraph?.id}:${view}`}
+          nodes={[...graphSections, ...nodes]}
           edges={edges}
+          onInit={(instance) => {
+            flowRef.current = instance;
+          }}
           nodeTypes={NODE_TYPES}
           onNodeClick={(_, n) => {
             setSelection({ type: "node", id: n.id });
@@ -1394,9 +1704,10 @@ export default function App() {
           nodesDraggable={!isImported && view === "design"}
           nodesConnectable={!isImported && view === "design"}
           defaultViewport={{ x: 35, y: 45, zoom: 1 }}
-          minZoom={0.5}
-          maxZoom={1.5}
-          fitView={false}
+          minZoom={0.12}
+          maxZoom={1.75}
+          fitView
+          fitViewOptions={{ padding: 0.14, minZoom: 0.16, maxZoom: 1 }}
           proOptions={{ hideAttribution: true }}
         >
           <Background color="var(--dots)" gap={22} size={1} />
@@ -1408,10 +1719,13 @@ export default function App() {
           <span className="dot" />{" "}
           {view === "observed"
             ? "Observed activity"
-            : "Declared application structure"}
+            : isImported
+              ? "Source structure · not execution order"
+              : "Declared workflow"}
         </span>
         <span>
-          {nodes.length} workflow nodes · {edges.length} connections
+          {nodes.length} nodes · {edges.length} of{" "}
+          {presentation?.totalEdgeCount || 0} connections shown
         </span>
       </div>
     </div>
@@ -1726,7 +2040,7 @@ export default function App() {
           <p>
             {node?.description ||
               (selectedEdge
-                ? `${selectedEdge.source} → ${selectedEdge.target}`
+                ? `${observedGraph?.nodes.find((n) => n.id === selectedEdge.source)?.label || selectedEdge.source} → ${observedGraph?.nodes.find((n) => n.id === selectedEdge.target)?.label || selectedEdge.target}`
                 : "")}
           </p>
         </div>
@@ -1867,9 +2181,10 @@ export default function App() {
                       .map((e) => (
                         <button
                           key={e.id}
-                          onClick={() =>
-                            setSelection({ type: "edge", id: e.id })
-                          }
+                          onClick={() => {
+                            setGraphDetail("all");
+                            setSelection({ type: "edge", id: e.id });
+                          }}
                         >
                           <GitBranch size={13} />
                           {e.label}
@@ -1944,8 +2259,12 @@ export default function App() {
                     </select>
                   </Field>
                   <div className="callout small">
-                    Provenance: {selectedEdge.provenance || "declared"}.
-                    Revision cycles are capped by the graph’s maximum revisions.
+                    Provenance: {selectedEdge.provenance || "declared"}.{" "}
+                    {externalRun && selectedEdge.provenance === "observed"
+                      ? "Parent links show trace context; they do not prove a data dependency or execution order."
+                      : isImported
+                        ? "Source relationships describe structure. Observe a run to verify actual activity."
+                        : "Revision cycles are capped by the graph’s maximum revisions."}
                   </div>
                   {!locked && (
                     <button
@@ -2252,11 +2571,17 @@ export default function App() {
   }
   function GraphWorkspace({ playground = false }: { playground?: boolean }) {
     return (
-      <div className="workspace">
+      <div
+        className={`workspace ${graphExpanded ? "graph-fullscreen" : ""} ${graphExpanded && !fullscreenInspector ? "inspector-collapsed" : ""}`}
+        ref={graphWorkspaceRef}
+        role={graphExpanded ? "dialog" : undefined}
+        aria-modal={graphExpanded ? true : undefined}
+        aria-label={graphExpanded ? "Full-screen graph" : undefined}
+      >
         <div className="workspace-main">
           {graphPanel}
-          {playground && RunPanel()}
-          {!playground && (
+          {playground && !graphExpanded && RunPanel()}
+          {!playground && !graphExpanded && (
             <div className="graph-guidance">
               <div>
                 <strong>
@@ -2303,7 +2628,7 @@ export default function App() {
             </div>
           )}
         </div>
-        {Inspector()}
+        {(!graphExpanded || fullscreenInspector) && Inspector()}
       </div>
     );
   }

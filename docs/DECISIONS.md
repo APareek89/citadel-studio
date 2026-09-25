@@ -122,6 +122,16 @@
 
 **Consequence:** the generated viewer loads Mermaid from a CDN and needs connectivity to render. AWS CLI/profile setup is complete, but no cloud resources have been provisioned. Hosted repository/code execution needs an authenticated local runner or a separately designed hosted sandbox; neither is implied by hosting the UI.
 
+## 13 — Presentation can simplify source maps without rewriting execution
+
+**Chosen:** keep the versioned graph and canonical edge IDs authoritative. A deterministic, browser-side layout groups cyclic and related components; an imported source overview may show a connected subset while every workflow node and explicit feedback edge remains available. All connections and executable-manifest views preserve every original visible relationship, including parallel edges. Supporting resources remain separately inspectable. External traces additionally offer Recorded path (event-backed nodes and original observed relationships) and Full source context (the complete saved run graph).
+
+**Reason:** the user needs a readable entry point and full control. Candidate coverage does not establish usability, and losing a feedback contract is more serious than displaying another arrow.
+
+**Rejected:** saving a reduced graph over the original, inventing links or chronological arrows to make a neat diagram, treating same-rank peers as parallel execution, using endpoint deduplication as the meaning of All connections, or lighting unvisited source nodes as though they executed.
+
+**Consequence:** layout is free local computation and does not remap source or invoke a model. Fullscreen, Fit/Focus, labels, path/context scope and inspector visibility are temporary exploration state. Coordinates and routing hints do not change relationship kind, provenance, invocation history or scheduler behavior. The helper contract including external path has 16 passing free checks and the initial desktop pass succeeded; final revised-control browser/build acceptance remains explicit in [QA-REPORT.md](QA-REPORT.md).
+
 ## QA evidence boundary
 
 Live inference in this checkpoint used Gemini only; the other four provider adapters are fixture-tested. One connected red-team probe remains inconclusive after schema validation and an output-cap failure. These limits are preserved in [QA-REPORT.md](QA-REPORT.md). AWS setup is read-only and Docker is absent. No hosted auth/database or general repository runtime is implied by the local MVP.
