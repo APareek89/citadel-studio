@@ -15,7 +15,14 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { checkoutGithub, listGithubRepos } from "../server/github.js";
+import {
+  checkoutGithub,
+  listGithubRepos,
+  githubStatus,
+  connectGithubToken,
+  disconnectGithubToken,
+  setGithubRedactionHook,
+} from "../server/github.js";
 const exec = promisify(execFile);
 const url = "https://github.com/APareek89/fixture-app";
 
@@ -114,9 +121,9 @@ test("GitHub acquisition isolates Git config, lists authenticated metadata, reus
         description: "Private source fixture",
       },
     ];
-    const wrapper = `#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process');const args=process.argv.slice(2);fs.appendFileSync(process.env.FIXTURE_LOG,JSON.stringify({program:require('node:path').basename(process.argv[1]),args,gitDir:process.env.GIT_DIR,configCount:process.env.GIT_CONFIG_COUNT,global:process.env.GIT_CONFIG_GLOBAL})+'\\n');
-if(process.argv[1].endsWith('/gh')){if(process.env.FAIL_GH){process.stderr.write('Bearer synthetic-test-secret');process.exit(1)}process.stdout.write(process.env.FIXTURE_LIST);process.exit(0)}
-const clone=args.indexOf('clone');if(clone>=0){const separator=args.lastIndexOf('--');const remote=args[separator+1];args[separator+1]=process.env.FIXTURE_REPO;args.unshift('-c','protocol.file.allow=always');const r=cp.spawnSync(process.env.REAL_GIT,args,{env:process.env,encoding:'utf8'});if(r.status!==0){process.stderr.write(r.stderr||'');process.exit(r.status||1)}const dest=args[args.length-1];const c=cp.spawnSync(process.env.REAL_GIT,['-C',dest,'config','remote.origin.url',remote],{env:process.env,encoding:'utf8'});process.exit(c.status||0)}const r=cp.spawnSync(process.env.REAL_GIT,args,{env:process.env,encoding:'utf8'});process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exit(r.status||0);`;
+    const wrapper = `#!${process.execPath}\nconst fs=require('node:fs'),cp=require('node:child_process');const args=process.argv.slice(2);fs.appendFileSync(process.env.FIXTURE_LOG,JSON.stringify({program:require('node:path').basename(process.argv[1]),args,gitDir:process.env.GIT_DIR,configCount:process.env.GIT_CONFIG_COUNT,global:process.env.GIT_CONFIG_GLOBAL,tokenViaEnvironment:!!process.env.WORKBENCH_GITHUB_CLONE_TOKEN})+'\\n');
+if(process.argv[1].endsWith('/gh')){if(process.env.FAIL_GH){process.stderr.write('Bearer synthetic-test-secret');process.exit(1)}process.stdout.write(args.includes('user')?JSON.stringify({login:'FixtureOwner'}):process.env.FIXTURE_LIST);process.exit(0)}
+const clone=args.indexOf('clone');if(clone>=0){if(process.env.WORKBENCH_GITHUB_CLONE_TOKEN){const helper=process.env.GIT_ASKPASS;const user=cp.spawnSync(helper,['Username for https://github.com'],{env:process.env,encoding:'utf8'});const pass=cp.spawnSync(helper,['Password for https://github.com'],{env:process.env,encoding:'utf8'});if(user.stdout.trim()!=='x-access-token'||pass.stdout.trim()!==process.env.WORKBENCH_GITHUB_CLONE_TOKEN||fs.readFileSync(helper,'utf8').includes(process.env.WORKBENCH_GITHUB_CLONE_TOKEN))process.exit(73);fs.appendFileSync(process.env.FIXTURE_LOG,JSON.stringify({askpassVerified:true})+'\\n');}const separator=args.lastIndexOf('--');const remote=args[separator+1];args[separator+1]=process.env.FIXTURE_REPO;args.unshift('-c','protocol.file.allow=always');const r=cp.spawnSync(process.env.REAL_GIT,args,{env:process.env,encoding:'utf8'});if(r.status!==0){process.stderr.write(r.stderr||'');process.exit(r.status||1)}const dest=args[args.length-1];const c=cp.spawnSync(process.env.REAL_GIT,['-C',dest,'config','remote.origin.url',remote],{env:process.env,encoding:'utf8'});process.exit(c.status||0)}const r=cp.spawnSync(process.env.REAL_GIT,args,{env:process.env,encoding:'utf8'});process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');process.exit(r.status||0);`;
     for (const name of ["git", "gh"]) {
       await writeFile(path.join(bin, name), wrapper);
       await chmod(path.join(bin, name), 0o700);
@@ -127,7 +134,14 @@ const clone=args.indexOf('clone');if(clone>=0){const separator=args.lastIndexOf(
       REAL_GIT: gitPath,
       FIXTURE_REPO: fixture,
       FIXTURE_LOG: log,
-      FIXTURE_LIST: JSON.stringify(fixtureList),
+      FIXTURE_LIST: JSON.stringify(
+        fixtureList.map((r) => ({
+          name: r.name,
+          html_url: r.url,
+          private: r.isPrivate,
+          description: r.description,
+        })),
+      ),
       GIT_CONFIG_GLOBAL: global,
       GIT_DIR: "/invalid/inherited/git",
       GIT_CONFIG_COUNT: "1",
@@ -196,6 +210,37 @@ const clone=args.indexOf('clone');if(clone>=0){const separator=args.lastIndexOf(
       path.join(first, ".git", "objects", "info", "alternates"),
     );
     await assert.rejects(checkoutGithub(url), /alternate objects/);
+    const beforeFetch = globalThis.fetch;
+    const token = "github_pat_synthetic_clone_only";
+    try {
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify({ login: "TokenOwner" }), { status: 200 });
+      const connected = await connectGithubToken(token);
+      assert.equal(connected.authSource, "token");
+      const tokenCheckout = await checkoutGithub(
+        "https://github.com/TokenOwner/second-repo",
+      );
+      const config = await readFile(
+        path.join(tokenCheckout, ".git", "config"),
+        "utf8",
+      );
+      assert.ok(!config.includes(token));
+      const logText = await readFile(log, "utf8");
+      assert.ok(!logText.includes(token));
+      assert.match(logText, /"askpassVerified":true/);
+      assert.deepEqual(
+        (await readdir(path.dirname(tokenCheckout))).filter((p) =>
+          p.startsWith(".clone-"),
+        ),
+        [],
+      );
+    } finally {
+      disconnectGithubToken();
+      globalThis.fetch = beforeFetch;
+    }
+    const fallback = await githubStatus();
+    assert.equal(fallback.login, "FixtureOwner");
+    assert.equal(fallback.authSource, "gh");
     process.env.FAIL_GH = "1";
     await assert.rejects(listGithubRepos(), (error) => {
       assert.match((error as Error).message, /GitHub operation failed/);
@@ -210,5 +255,113 @@ const clone=args.indexOf('clone');if(clone>=0){const separator=args.lastIndexOf(
       if (!(key in envBefore)) delete process.env[key];
     Object.assign(process.env, envBefore);
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("GitHub token stays in memory, scopes metadata to the authenticated user, and sanitizes failures", async () => {
+  const fetchBefore = globalThis.fetch;
+  const notices: (string | undefined)[] = [];
+  const token = "github_pat_synthetic_auth_only";
+  let calls = 0;
+  setGithubRedactionHook((value) => notices.push(value));
+  try {
+    globalThis.fetch = async (input, init) => {
+      calls++;
+      assert.ok(String(input).startsWith("https://api.github.com/"));
+      assert.equal(init?.redirect, "error");
+      assert.equal(
+        new Headers(init?.headers).get("Authorization"),
+        "Bearer " + token,
+      );
+      return new Response(
+        JSON.stringify(
+          String(input).endsWith("/user")
+            ? { login: "NewOwner" }
+            : [
+                {
+                  name: "private-worker",
+                  html_url: "https://github.com/AnotherOrg/private-worker",
+                  private: true,
+                  description: "Owned collaboration",
+                },
+              ],
+        ),
+        { status: 200 },
+      );
+    };
+    const status = await connectGithubToken(token);
+    assert.deepEqual(status, {
+      connected: true,
+      login: "NewOwner",
+      authSource: "token",
+    });
+    assert.ok(!JSON.stringify(status).includes(token));
+    assert.equal(
+      (await listGithubRepos())[0].url,
+      "https://github.com/anotherorg/private-worker",
+    );
+    assert.equal((await githubStatus()).repositoryCount, 1);
+    assert.equal(calls, 2);
+    assert.equal(notices.at(-1), token);
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ message: "Bearer " + token }), {
+        status: 401,
+      });
+    await assert.rejects(listGithubRepos(), (error) => {
+      assert.match((error as Error).message, /rejected/);
+      assert.ok(!(error as Error).message.includes(token));
+      return true;
+    });
+    assert.equal((await githubStatus()).connected, false);
+    await assert.rejects(listGithubRepos(), /no longer valid/);
+    const before = calls;
+    await assert.rejects(
+      connectGithubToken("Bearer invalid token"),
+      /complete GitHub token/,
+    );
+    assert.equal(calls, before);
+    globalThis.fetch = async () => {
+      throw new Error("GitHub rejected this token: " + token);
+    };
+    await assert.rejects(connectGithubToken(token), (error) => {
+      assert.match((error as Error).message, /could not complete/);
+      assert.ok(!(error as Error).message.includes(token));
+      return true;
+    });
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ message: token }), { status: 403 });
+    await assert.rejects(
+      connectGithubToken(token),
+      /denied access or reached a rate limit/,
+    );
+    globalThis.fetch = async () =>
+      new Response("x".repeat(2_000_001), { status: 200 });
+    await assert.rejects(connectGithubToken(token), /response limit/);
+  } finally {
+    disconnectGithubToken();
+    assert.equal(notices.at(-1), undefined);
+    setGithubRedactionHook(() => {});
+    globalThis.fetch = fetchBefore;
+  }
+});
+
+test("disconnect prevents a delayed token validation from restoring revoked session state", async () => {
+  const fetchBefore = globalThis.fetch;
+  let resolve!: (r: Response) => void;
+  const notices: (string | undefined)[] = [];
+  setGithubRedactionHook((value) => notices.push(value));
+  try {
+    globalThis.fetch = async () => new Promise<Response>((r) => (resolve = r));
+    const pending = connectGithubToken("github_pat_synthetic_delayed");
+    disconnectGithubToken();
+    resolve(
+      new Response(JSON.stringify({ login: "LateLogin" }), { status: 200 }),
+    );
+    await assert.rejects(pending, /superseded/);
+    assert.ok(!notices.includes("github_pat_synthetic_delayed"));
+  } finally {
+    disconnectGithubToken();
+    setGithubRedactionHook(() => {});
+    globalThis.fetch = fetchBefore;
   }
 });

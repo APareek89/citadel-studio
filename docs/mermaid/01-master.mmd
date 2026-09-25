@@ -6,7 +6,8 @@ API["IMPLEMENTED · Local API boundary<br/>[FUNCTION]<br/>in: browser request on
 MODE{"IMPLEMENTED · Operation selection<br/>[FUNCTION]<br/>in: requested mode<br/>out: owning module"}:::dec
 ALIGN["IMPLEMENTED · Alignment and generation<br/>[AGENT · selected config.model]<br/>in: brief and answers<br/>out: questions, assumptions and graph<br/>see diagram 05"]:::agent
 RUN["IMPLEMENTED · Manifest execution<br/>[FUNCTION]<br/>in: graph snapshot and input<br/>out: invocation events and terminal result<br/>see diagram 03"]:::fn
-REPO["IMPLEMENTED · Source discovery and trusted adapter<br/>[FUNCTION]<br/>in: selected local repository<br/>out: source map or isolated overview run<br/>see diagram 04"]:::fn
+REPO["IMPLEMENTED · Source acquisition and mapping<br/>[FUNCTION]<br/>in: GitHub, local checkout or folder upload<br/>out: source evidence, interpreted map or supported adapter request<br/>see diagram 04"]:::fn
+OBSERVE["IMPLEMENTED · External trace ingestion<br/>[FUNCTION]<br/>in: native span token or Langfuse project keys<br/>out: recorded external spans; never app execution<br/>see diagram 08"]:::fn
 MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/>in: 2–5 candidates, 1–20 cases or up to 6 approved probes<br/>out: runs with grouped evidence<br/>see diagram 05"]:::fn
 EXPORT["IMPLEMENTED · Portable project export<br/>[FUNCTION]<br/>in: supported project revision<br/>out: secret-free runnable ZIP<br/>see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway<br/>[FUNCTION]<br/>in: bounded request and credential ID<br/>out: model text and usage<br/>see diagram 02"]:::fn
@@ -16,11 +17,13 @@ UI --> API --> MODE
 MODE -->|"Build alignment"| ALIGN
 MODE -->|"Build execution"| RUN
 MODE -->|"Connect and Debug"| REPO
+MODE -->|"Connect live traces"| OBSERVE
 MODE -->|"Model Lab, Evals, Red Team"| MODES
 MODE -->|"Launch download"| EXPORT
 ALIGN --> PROVIDER
 RUN --> PROVIDER
-REPO -->|"only mediated model calls"| PROVIDER
+REPO -->|"AI mapping or mediated adapter model calls"| PROVIDER
+OBSERVE --> STORE
 MODES --> RUN
 MODES -->|"source-owned campaigns"| REPO
 MODES -->|"planner or judge"| PROVIDER

@@ -1,12 +1,19 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, lstat, realpath, rename, rm } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  lstat,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 const execute = promisify(execFile);
-const OWNER = "APareek89";
 const TIMEOUT = 90_000;
 export interface GithubRepository {
   name: string;
@@ -32,9 +39,145 @@ function githubUrl(value: string): { url: string; identity: string } {
   return { url: `https://github.com/${identity}.git`, identity };
 }
 
+export interface GithubStatus {
+  connected: boolean;
+  login?: string;
+  authSource: "token" | "gh" | null;
+  repositoryCount?: number;
+}
+let tokenSession: { token: string; login: string; valid: boolean } | undefined;
+let repositoryCount: number | undefined;
+let authGeneration = 0;
+let redactionHook: (token: string | undefined) => void = () => {};
+export function setGithubRedactionHook(
+  hook: (token: string | undefined) => void,
+): void {
+  redactionHook = hook;
+  hook(tokenSession?.token);
+}
+const repoRoute =
+  "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member";
+
+class GithubRequestError extends Error {}
+
+async function tokenApi(route: string, token: string): Promise<unknown> {
+  try {
+    const response = await fetch("https://api.github.com" + route, {
+      headers: {
+        Authorization: "Bearer " + token,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      signal: AbortSignal.timeout(15000),
+      redirect: "error",
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        if (tokenSession?.token === token) tokenSession.valid = false;
+        throw new GithubRequestError(
+          "GitHub rejected this token. Reconnect with an active token.",
+        );
+      }
+      if (response.status === 403 || response.status === 429)
+        throw new GithubRequestError(
+          "GitHub denied access or reached a rate limit. Check token permissions and retry later.",
+        );
+      throw new GithubRequestError(
+        "GitHub request failed. Check repository access and retry.",
+      );
+    }
+    if (!response.body)
+      throw new GithubRequestError("GitHub returned invalid metadata.");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const part = await reader.read();
+        if (part.done) break;
+        size += part.value.byteLength;
+        if (size > 2_000_000) {
+          await reader.cancel();
+          throw new GithubRequestError(
+            "GitHub metadata exceeded the response limit.",
+          );
+        }
+        chunks.push(part.value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    try {
+      return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    } catch {
+      throw new GithubRequestError("GitHub returned invalid metadata.");
+    }
+  } catch (error) {
+    if (error instanceof GithubRequestError) throw error;
+    throw new GithubRequestError(
+      "GitHub request could not complete. Check network access and try again.",
+    );
+  }
+}
+function accountLogin(value: unknown): string {
+  const login = (value as { login?: unknown })?.login;
+  if (
+    typeof login !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(login)
+  )
+    throw new Error("GitHub returned invalid account metadata.");
+  return login;
+}
+export async function connectGithubToken(value: string): Promise<GithubStatus> {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_]{12,512}$/.test(value.trim()))
+    throw new Error("Enter a complete GitHub token without whitespace.");
+  const token = value.trim(),
+    generation = ++authGeneration;
+  const login = accountLogin(await tokenApi("/user", token));
+  if (generation !== authGeneration)
+    throw new Error("GitHub connection was superseded by another request.");
+  redactionHook(token);
+  tokenSession = { token, login, valid: true };
+  repositoryCount = undefined;
+  return { connected: true, login, authSource: "token" };
+}
+export function disconnectGithubToken(): void {
+  authGeneration++;
+  tokenSession = undefined;
+  repositoryCount = undefined;
+  redactionHook(undefined);
+}
+export async function githubStatus(): Promise<GithubStatus> {
+  if (tokenSession)
+    return {
+      connected: tokenSession.valid,
+      login: tokenSession.login,
+      authSource: "token",
+      ...(repositoryCount === undefined ? {} : { repositoryCount }),
+    };
+  try {
+    const login = accountLogin(
+      JSON.parse(
+        await command("gh", ["api", "user", "--hostname", "github.com"], 15000),
+      ),
+    );
+    return {
+      connected: true,
+      login,
+      authSource: "gh",
+      ...(repositoryCount === undefined ? {} : { repositoryCount }),
+    };
+  } catch {
+    return { connected: false, authSource: null };
+  }
+}
+
 function environment(): NodeJS.ProcessEnv {
   const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+    Object.entries(process.env).filter(
+      ([key]) =>
+        !key.startsWith("GIT_") && key !== "WORKBENCH_GITHUB_CLONE_TOKEN",
+    ),
   );
   return {
     ...env,
@@ -53,10 +196,11 @@ async function command(
   program: "git" | "gh",
   args: string[],
   timeout = TIMEOUT,
+  extraEnv: NodeJS.ProcessEnv = {},
 ): Promise<string> {
   try {
     const result = await execute(program, args, {
-      env: environment(),
+      env: { ...environment(), ...extraEnv },
       timeout,
       killSignal: "SIGKILL",
       maxBuffer: 2_000_000,
@@ -101,47 +245,47 @@ const gitArgs = [
 ];
 
 export async function listGithubRepos(): Promise<GithubRepository[]> {
-  const raw = await command(
-    "gh",
-    [
-      "repo",
-      "list",
-      OWNER,
-      "--limit",
-      "100",
-      "--json",
-      "name,url,isPrivate,description",
-    ],
-    30_000,
-  );
+  const current = tokenSession;
+  if (current && !current.valid)
+    throw new Error(
+      "GitHub token is no longer valid. Reconnect or disconnect it before using CLI authentication.",
+    );
   let items: unknown;
-  try {
-    items = JSON.parse(raw);
-  } catch {
-    throw new Error("GitHub returned invalid repository metadata.");
+  if (current) items = await tokenApi(repoRoute, current.token);
+  else {
+    const raw = await command(
+      "gh",
+      ["api", repoRoute.slice(1), "--hostname", "github.com"],
+      30_000,
+    );
+    try {
+      items = JSON.parse(raw);
+    } catch {
+      throw new Error("GitHub returned invalid repository metadata.");
+    }
   }
   if (!Array.isArray(items) || items.length > 100)
     throw new Error("GitHub returned invalid repository metadata.");
-  return items.map((item) => {
+  const result = items.map((item) => {
     if (
       !item ||
       typeof item.name !== "string" ||
-      typeof item.url !== "string" ||
-      typeof item.isPrivate !== "boolean"
+      typeof item.html_url !== "string" ||
+      typeof item.private !== "boolean"
     )
       throw new Error("GitHub returned invalid repository metadata.");
-    const parsed = githubUrl(item.url);
-    if (parsed.identity.split("/")[0] !== OWNER.toLowerCase())
-      throw new Error("GitHub returned an unexpected repository owner.");
+    const parsed = githubUrl(item.html_url);
     return {
       name: item.name.slice(0, 100),
       url: parsed.url.replace(/\.git$/, ""),
-      isPrivate: item.isPrivate,
+      isPrivate: item.private,
       ...(typeof item.description === "string"
         ? { description: item.description.slice(0, 1000) }
         : {}),
     };
   });
+  if (current === tokenSession) repositoryCount = result.length;
+  return result;
 }
 
 async function present(file: string): Promise<boolean> {
@@ -276,20 +420,44 @@ export async function checkoutGithub(value: string): Promise<string> {
     const checkout = path.join(staging, "checkout");
     const template = path.join(staging, "empty-template");
     await mkdir(template, { mode: 0o700 });
-    await command("git", [
-      ...gitArgs,
-      "clone",
-      "--depth",
-      "1",
-      "--single-branch",
-      "--no-tags",
-      "--no-checkout",
-      "--no-recurse-submodules",
-      `--template=${template}`,
-      "--",
-      parsed.url,
-      checkout,
-    ]);
+    const token = tokenSession;
+    if (token && !token.valid)
+      throw new Error(
+        "GitHub token is no longer valid. Reconnect it before cloning.",
+      );
+    const cloneArgs = token ? gitArgs.slice(0, -2) : gitArgs;
+    let cloneEnv: NodeJS.ProcessEnv = {};
+    if (token) {
+      const askpass = path.join(staging, "askpass.sh");
+      await writeFile(
+        askpass,
+        `#!/bin/sh\ncase "$1" in *Username*|*username*) printf '%s\\n' 'x-access-token';; *Password*|*password*) printf '%s\\n' "$WORKBENCH_GITHUB_CLONE_TOKEN";; *) exit 1;; esac\n`,
+        { mode: 0o700, flag: "wx" },
+      );
+      cloneEnv = {
+        GIT_ASKPASS: askpass,
+        WORKBENCH_GITHUB_CLONE_TOKEN: token.token,
+      };
+    }
+    await command(
+      "git",
+      [
+        ...cloneArgs,
+        "clone",
+        "--depth",
+        "1",
+        "--single-branch",
+        "--no-tags",
+        "--no-checkout",
+        "--no-recurse-submodules",
+        `--template=${template}`,
+        "--",
+        parsed.url,
+        checkout,
+      ],
+      TIMEOUT,
+      cloneEnv,
+    );
     // Clone generated this local config with no user/system templates or filters.
     await verifyCheckout(checkout, await realpath(staging), parsed.identity);
     await command(

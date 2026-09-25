@@ -8,6 +8,9 @@ User approved free automatic checks 2026-09-25. Paid tests are separate: US$3 ma
 - F3: failed validation → bounded feedback; blocked output never released.
 - F4: timeout/cancel/restart → partial events retained, no silent side-effect replay.
 - F5: 5-slot comparison and eval baseline → individual errors preserved, regression differs from infrastructure error.
+- F7: private PAT/CLI or reviewed folder → bounded AI map with source-valid references, candidate coverage and unresolved retention.
+- F8: native/Langfuse ingestion → scoped auth, bounded payloads, partial evidence, preserved run graph, redacted IO, no execution side effects.
+- F9: source replacement/remap → stale completion rejected, prior run snapshots retained and old integration credentials revoked on actual replacement.
 - F6: export/security/UI → secret-free portable ZIP; light/dark, keyboard, mobile and hidden-node access.
 
 ## Golden set — EXAMPLES for live milestone QA
@@ -30,3 +33,5 @@ User approved free automatic checks 2026-09-25. Paid tests are separate: US$3 ma
 - 2026-09-25: Root Codex in-app browser verified mobile/desktop, light/dark, create/edit/run, hidden nodes, private GitHub picker, diagnosis, historical immutable trace, red findings, regression results and model outputs. Export disconnect regression and final Model Lab navigation verification in progress. Estimated/reserved model QA remains below US$0.10 including export sample (US$3 approved cap). See docs/QA-REPORT.md for final evidence and limitations.
 
 - 2026-09-25 final gate: 56/56 free tests passed, zero skips; TypeScript/production build passed. Fresh final ZIP installs and validates independently, and includes shared pricing plus abort-survival fix. Final IAB confirms Model Lab defaults to a completed immutable trace, candidate switching works and current-draft routing works; project reload restores saved brief/alignment/graph. Browser warning/error log is empty. No further paid calls were needed.
+
+- 2026-09-25 connection extension:109 free tests pass; build passes. Root IAB directory review/source inspection, native live→completed node output and Langfuse loopback sync/partial output passed. Gemini Flash Lite maps Model Arena 4/4 candidates and Demo Studio 92/92 into 16 visible nodes; bounded inventory/body coverage remains explicit. Reserved workbench usage US$0.101072 plus ~US$0.0006701 export sample, below US$0.11 and approved US$3. No real Langfuse account or pasted GitHub PAT supplied.

@@ -23,19 +23,21 @@ Optional `WORKBENCH_SPEND_LIMIT_USD=3 npm start` applies a cumulative local spen
 ## Working paths
 
 - **Build:** model-assisted alignment, editable agent prompts/checks/schemas/edges, bounded execution, node evidence and a runnable ZIP with CLI and local browser interface.
-- **Connect & Debug:** local checkout discovery, source-linked visible and hidden nodes. The inspected Agentic Learning Studio revision has an isolated overview adapter using its original functions, schemas and renderer.
+- **Connect & Debug:** private/public GitHub access through a session token or local CLI login, local checkouts, and folder uploads. A small model interprets source-backed workflow candidates; deterministic checks retain coverage and hidden resources. Observe an existing app through the native JavaScript/Python tracing helpers or a manual Langfuse observation import. [Connection setup](docs/CONNECTIONS.md) covers each path.
 - **Red Team:** review a finite generated plan, run synthetic probes, inspect reproduced/suspected/inconclusive findings, and promote a case to evals.
 - **Model Lab:** two to five candidates, fixed-input node or whole-workflow comparison, per-slot failure retention, per-node traces. One prompt does not establish a model ranking.
 - **Evals:** versioned JSON cases, deterministic assertions, optional rubric judge, immutable reports and comparable baseline regressions. Infrastructure failures are errors, not quality failures.
 
 ## Honest boundaries
 
-- Connect accepts a **local checkout or GitHub URL**. The repository picker uses your authenticated local GitHub CLI. URL connections create a private managed shallow clone without running hooks, install scripts or submodules. Existing managed clones are reused unchanged; reconnect does not pull or reset local changes.
+- Connect accepts a **local checkout, GitHub URL or uploaded source folder**. GitHub uses a validated personal access token held in this server session, or the local GitHub CLI login. Managed clones disable repository hooks, install scripts and submodules; reconnect reuses the existing checkout without pulling/resetting it. Folder uploads store filtered text in a separate private directory.
+- AI mapping sends bounded, scrubbed source evidence to the selected model to group workflow stages. Local TypeScript/JavaScript and Python AST parsing supplies candidates; deterministic checks validate source references, candidate assignments and relationships. Static discovery remains available without an inference call. Coverage is bounded and disclosed; an inferred map cannot prove all runtime paths are represented.
 - Learning Studio executes the **overview path only** at inspected revision `5968d23`. Full lesson build and other routes are mapped, not executed. The adapter disables database, uploads/retrieval, billing, auth and Langfuse; output uses model knowledge and an isolated memory artifact store. It is not a full production-environment reproduction.
 - That reviewed adapter uses a tested macOS sandbox. Unknown or changed imported code stays discovery-only. Arbitrary editable code requires Docker and the `node:22-alpine` image; otherwise preflight blocks it. Docker is not installed on this machine yet.
 - Built-in tools: uppercase, word count and JSON formatting. External tool integrations, general source patching, arbitrary branching languages and automatic deployment are not implemented.
 - New manifest workflows run data edges in deterministic topological order. Feedback edges permit bounded validator-to-agent revision. Orchestrators with no prompt pass through; adding a prompt uses a model. Graph code is a sandboxed tool body that returns a string or JSON value.
 - Source maps label inferred/declared relationships. An observed trace covers only that actual run. Supporting files stay under **Hidden nodes**, and runtime resource events are still retained.
+- Native telemetry receives only operations you instrument in the existing app. Its per-project token and all integration credentials are session-only; reconnect after restarting the workbench. Langfuse imports are manual, partial snapshots of the last 24 hours, capped at 300 observations. Parent spans describe nesting, not proven data flow. The receiver is loopback-only and must be reachable from the app process; connecting it never starts or deploys that app.
 - Red-team specialists currently use bounded probes and shared-provider review. Independent specialist coordination is Phase 2. Semantic findings need human confirmation.
 - No DB/auth/cloud deployment has been added. AWS access is ready; see [docs/AWS-READINESS.md](docs/AWS-READINESS.md).
 

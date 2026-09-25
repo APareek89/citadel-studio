@@ -1,13 +1,19 @@
-%% 04 IMPLEMENTED — source map and narrowly trusted Learning Studio execution
+%% 04 IMPLEMENTED — source acquisition, AI interpretation and separate trusted execution
 flowchart TD
-SOURCE{"Repository source?<br/>[FUNCTION]<br/>in: local path, GitHub URL or picker choice<br/>out: local discovery or managed acquisition"}:::dec
-CATALOG["List GitHub repositories<br/>[FUNCTION]<br/>in: existing authenticated gh login<br/>out: at most 100 account repositories; 30-second deadline"]:::fn
+SOURCE{"Repository source?<br/>[FUNCTION]<br/>in: local path, GitHub choice or uploaded folder<br/>out: source acquisition path"}:::dec
+AUTH["Validate source account<br/>[FUNCTION]<br/>in: session PAT or existing local gh login<br/>out: account identity; session PAT held in memory"]:::fn
+CATALOG["List accessible GitHub repositories<br/>[FUNCTION]<br/>in: validated account<br/>out: at most 100 public/private repository choices"]:::fn
 URL["Validate GitHub identity<br/>[FUNCTION]<br/>in: HTTPS github.com owner/repository URL<br/>out: normalized identity; reject credentials, escapes and extra paths"]:::fn
 CLONE["Acquire or reuse managed checkout<br/>[FUNCTION]<br/>in: validated identity and per-repository lock<br/>out: verified local source directory<br/>shallow clone; 90-second deadline; 2MB CLI output cap"]:::fn
 ISOLATE["Enforce Git acquisition boundary<br/>[FUNCTION]<br/>in: checkout and origin/config checks<br/>out: source only; no hooks, filters, submodules or repo scripts<br/>existing checkouts preserved; atomic publication"]:::fn
 PATH["Resolve selected local checkout<br/>[FUNCTION]<br/>in: local or managed repository path<br/>out: canonical directory"]:::fn
+UPLOAD["Validate folder text upload<br/>[FUNCTION]<br/>in: portable relative paths and text<br/>out: private separate source copy plus skip counts<br/>at most 500 files, 900000 bytes each and 10 MiB total"]:::fn
 FILES["Discover source resources<br/>[FUNCTION]<br/>in: repository directory<br/>out: at most 500 files, depth at most 6<br/>excludes secrets, symlinks and generated/dependency folders"]:::fn
-MAP["Build source-linked graph<br/>[FUNCTION]<br/>in: recognized paths and symbols<br/>out: workflow nodes plus collapsed UI, DB/auth and Markdown"]:::fn
+AST["Extract bounded source evidence<br/>[LIBRARY · TypeScript AST and isolated Python ast.parse]<br/>in: at most 220 files and 12 MB source<br/>out: candidates, declared/inferred calls and source references<br/>repository code never executes"]:::data
+METHOD{"Mapping mode?<br/>[FUNCTION]<br/>in: user choice and model configuration<br/>out: AI interpretation or static candidates"}:::dec
+MODEL["Interpret meaningful workflow stages<br/>[AGENT · selected small config.model]<br/>in: scrubbed excerpts and candidate evidence<br/>out: at most 20 proposed workflow stages"]:::agent
+VERIFY["Validate proposal coverage<br/>[FUNCTION]<br/>in: proposed nodes, references and relationships<br/>out: validated assignments; unknown candidates retained<br/>source paths/lines, unique IDs and valid edges checked"]:::fn
+MAP["Retain source-owned graph<br/>[DATA · versioned graph and coverage]<br/>in: validated interpretation or static candidates<br/>out: core workflow, hidden resources and unresolved disclosure<br/>inferred structure is not observed execution"]:::data
 TRUST{"Approved source and platform?<br/>[FUNCTION]<br/>in: adapter, pinned revision and 14 allowlisted files<br/>out: isolated execution or discovery only<br/>macOS sandbox-exec required"}:::dec
 OPAQUE["Retain discovery-only map<br/>[DATA · source references]<br/>in: unsupported or changed source<br/>out: coverage and opaque components; no execution"]:::term
 GIT["Read exact committed source<br/>[FUNCTION]<br/>in: approved revision and source allowlist<br/>out: source matching current files<br/>replacement objects disabled; inherited GIT overrides removed"]:::fn
@@ -19,10 +25,13 @@ ART["Render isolated overview artifact<br/>[FUNCTION]<br/>in: original schema-va
 RESULT["Return overview result and trace<br/>[FUNCTION]<br/>in: artifact and observed invocation events<br/>out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
 CLEAN["Force-stop and remove scratch files<br/>[FUNCTION]<br/>in: error, cancellation or 120-second deadline<br/>out: terminated worker and preserved partial trace"]:::term
 SOURCE -->|"local path"| PATH
-SOURCE -->|"GitHub picker"| CATALOG --> URL
-SOURCE -->|"GitHub URL"| URL
+SOURCE -->|"GitHub picker or private URL"| AUTH --> CATALOG --> URL
+SOURCE -->|"folder upload"| UPLOAD --> PATH
 URL --> CLONE --> ISOLATE --> PATH
-PATH --> FILES --> MAP --> TRUST
+PATH --> FILES --> AST --> METHOD
+METHOD -->|"AI workflow map"| MODEL --> VERIFY --> MAP
+METHOD -->|"static discovery; no inference"| MAP
+MAP -->|"explicit supported run request only"| TRUST
 TRUST -->|"unsupported or mismatched"| OPAQUE
 TRUST -->|"approved overview only"| GIT --> BUNDLE --> OS --> BRIDGE
 BRIDGE -->|"model request"| LLM

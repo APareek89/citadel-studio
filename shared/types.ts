@@ -35,6 +35,8 @@ export interface GraphNode {
   rules?: { required?: string[]; forbidden?: string[]; maxLength?: number };
   tool?: "uppercase" | "word-count" | "json-format" | "code";
   modelFixed?: boolean;
+  sourceRefs?: SourceRef[];
+  mappingCandidateIds?: string[];
   position?: { x: number; y: number };
 }
 export interface GraphEdge {
@@ -157,6 +159,29 @@ export interface Run {
   finishedAt?: string;
   usage: Usage;
   parentId?: string;
+  external?: {
+    kind: "workbench" | "langfuse";
+    traceId: string;
+    namespace: string;
+    partial: boolean;
+    spans: ObservedSpan[];
+  };
+}
+export interface ObservedSpan {
+  id: string;
+  name: string;
+  parentId?: string;
+  nodeId?: string;
+  role?: NodeRole;
+  status: "running" | "completed" | "failed";
+  startTime: string;
+  endTime?: string;
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+  model?: string;
+  usage?: Usage;
+  source?: SourceRef;
 }
 export interface Preflight {
   ok: boolean;
@@ -164,6 +189,7 @@ export interface Preflight {
   warnings: string[];
 }
 export interface RepoInfo {
+  sourceKind?: "upload";
   path: string;
   name: string;
   revision: string;
@@ -171,6 +197,18 @@ export interface RepoInfo {
   coverage: string[];
   limitations: string[];
   sources: { path: string; category: string }[];
+  mapping?: {
+    method: "ai" | "static";
+    model?: string;
+    discoveredFiles: number;
+    candidates: number;
+    mappedCandidates: number;
+    unresolvedCandidates: number;
+    sourceFilesRead: number;
+    truncated: boolean;
+    notes: string[];
+    error?: string;
+  };
 }
 export interface Comparison {
   id: string;

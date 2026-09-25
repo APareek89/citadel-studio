@@ -1,22 +1,22 @@
 # Handoff
-Update this snapshot after major changes. Read Learning.MD and Loop.MD at session start. Local checkpoints are automatic; never push without authorization. Standalone diagrams only. Free checks run after meaningful changes. Live QA has a total US$3 cap for this build; log spend and hypothesis before calls.
+Local checkpoints automatic; never push/deploy without authorization. Free journey loop on. Standalone diagrams only. Browser QA stays inside root's Codex in-app tab. Live model QA build-wide cap US$3.
 
 ## Current state
-Working local MVP at http://127.0.0.1:3001, open inside Codex. Five modes use real local services. Final free suite: 56/56 passed, no skips; production build passed. Live Gemini evidence covers alignment/run, five comparison slots (three successes, two independent errors), baseline regression, a seeded red-team finding, bounded output blocking, and original Learning Studio overview. Clean exported install and live CLI sample passed; final regenerated ZIP adds verified interrupted-upload handling and shared pricing. QA: docs/QA-REPORT.md. AWS CLI/profile configured; no cloud resources or deployment. Prior mock is in prototype/.
+Local app http://127.0.0.1:3001. Five MVP modes retained; new private GitHub PAT/CLI, reviewed folder upload, Python/TypeScript source candidates, small-LLM mapping with deterministic reference/candidate checks, native endpoint/token JS+Python helpers, Langfuse v2 connector and read-only code inspection. Gemini Flash Lite remapped Model Arena 4/4 and Demo Studio 92/92 selected candidates (16 nodes, 39 visible edges); supporting files hidden, bounded coverage explicit. Source maps do not execute arbitrary repos.
 
-Estimated reserved live QA: US$0.0265253 in the workbench ledger, plus roughly US$0.0006701 for the exported sample. This is under US$0.10 and the approved US$3 cap; not an invoice. See the explicit historical Flash-cost correction event and server/pricing.ts. Credentials were re-imported/validated after final backend restart and remain memory-only.
+109 free tests and production build pass; source ownership regression evidence is in docs/QA-REPORT.md. Root Codex IAB verified folder review, source modal, native running/completed output, Langfuse fixture sync/partial evidence, dark/light and 390px layout. Credentials are memory-only and cleared on server restart; Gemini re-imported/validated for handoff. Instructions: docs/CONNECTIONS.md. Prior mock in prototype/.
+
+Ledger reserved US$0.101072, completed estimated US$0.0926855, plus ~US$0.0006701 export sample: combined conservative estimate below US$0.11, not a provider invoice. No AWS resources created; no deployment.
 
 ## Pending / boundaries
-No known P0 remains on enabled local paths. General repo execution and source round-tripping are not implemented; only pinned Learning Studio overview is executed. Docker is absent, so arbitrary custom code is blocked. Other providers have free contract tests, not live verification. One imported adversarial probe is inconclusive due schema/output limits; do not claim a security pass. Future work: broaden adapters, strengthen specialist coordination (Phase 2), address journal/snapshot crash consistency and trace retention, then hosted DB/auth/tenant isolation and deployment (Phase 3). No automatic push/deploy.
-
-Browser QA must use root's Codex in-app browser only; subagents cannot access it. Final IAB journeys verified 390px/1440px themes/navigation, prompt/schema/edge edits, real runs and eval, GitHub connect, hidden resources, immutable traces, comparison outputs, red findings, regression detection, keyboard modal focus and project reload. Model Lab now auto-selects a completed candidate's immutable trace.
-
-## Session efficiency
-Approximate effort: 60% feature, 25% support/verification, 15% rework. Most late rework came from export transport handling, source/credential boundaries and historical-view state.
+No known unresolved P0 on enabled local paths. Pasted GitHub PAT and real Langfuse Cloud account need user credentials; new paths passed fixtures, private CLI access passed live. Instrumentation must be added by app owner; helpers were tested with synthetic code, not production Demo Studio. Bounded candidate accounting cannot prove whole-app/runtime completeness. Only pinned Learning Studio overview has a tested execution adapter. Docker absent, arbitrary code blocked. General imported source editing/execution, snapshot/journal transactions and retention, hosted auth/DB/tenant isolation/deployment remain future work. No push.
 
 ## Decisions
-- 2026-09-25 — Five modes share versioned graph, run events, credentials and local persistence.
-- 2026-09-25 — Supporting UI/DB/auth/Markdown nodes stay searchable under Hidden nodes.
-- 2026-09-25 — New graphs own manifest runtime; imported code stays source-owned with explicit coverage.
-- 2026-09-25 — Only pinned inspected Learning Studio source may use a tested OS sandbox adapter; arbitrary code requires Docker.
-- 2026-09-25 — User approved automatic local commits, free journey loop, milestone failure reviews, standalone diagrams, and up to US$3 live QA.
+- 2026-09-25 — Small LLM interprets workflow responsibilities; deterministic discovery and source/reference/ID checks enforce bounded accounting. Rejected deterministic-only mapping as insufficient for user apps.
+- 2026-09-25 — UI/DB/auth/Markdown stay in Hidden nodes; unassigned workflow candidates stay visibly grouped with all source references.
+- 2026-09-25 — Source access, semantic interpretation and observed execution are independent connections; map/observed edge provenance remains explicit.
+- 2026-09-25 — Native receiver uses project-scoped memory-only tokens; Langfuse reads bounded v2 snapshots with project keys, official cloud/loopback base URLs only.
+- 2026-09-25 — User authorized automatic local commits, free tests/milestone failure reviews, diagrams, and total US$3 live QA.
+
+## Session efficiency
+Approximate65% feature,20% verification/support,15% rework. Most rework came from evidence grouping and boundary tests for source identity, redaction and partial spans.

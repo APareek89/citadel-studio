@@ -67,3 +67,20 @@ Why 2: its dependency was the already-persisted ID, which did not change when da
 Deepest why [state]: depend on the availability of the resolved project, not just an identifier.
 Action: initialize from project?.id; confirmed saved brief, plan and graph restore in Codex's browser.
 Prevention: reload is part of the persisted-project journey, separate from switching projects.
+
+
+## 2026-09-25 — Private source access was mistaken for mapping support
+Symptom: Demo Studio showed one unresolved entry although GitHub access succeeded.
+Why 1: source discovery excluded Python; the generic importer was only an inventory.
+Why 2: authentication, structural interpretation and runtime observation shared an ambiguous connect journey.
+Deepest why [design]: make each capability independently visible and verifiable.
+Action: PAT/CLI and folder access; Python/TypeScript syntax candidates; a small LLM groups source-backed responsibilities; deterministic references/candidate accounting retain uncertainty. Native/Langfuse traces are a separate connection.
+Prevention: actual private Python/TypeScript repositories, omitted/forged candidate fixtures, bounded evidence labels and distinct source-versus-observed graph views.
+
+## 2026-09-25 — Mapping evidence, upload identity and trace boundaries
+Symptom: a first AI map exposed 92 cards; uploads lost their chosen name/inherited parent Git; out-of-order completed spans finalized too early; multiline secrets/object keys escaped redaction.
+Why 1: evidence excerpts favored file prefixes, candidate-level checks were coupled to body excerpts, filesystem ancestry implied repository ownership, and individual span completion implied trace completion.
+Why 2: tests covered simple string values and in-order lifecycle, but not representation/transport boundaries.
+Deepest why [design/testing]: validate semantic coverage, source identity and trace finality separately from convenient representations.
+Action: supply all parser-backed headers plus bounded DSL excerpts, cap 20 semantic groups, preserve unresolved references, deduplicate projected relationships; verify Git root ownership; retain upload names; require explicit native finalization; scrub whole files with line preservation and redact JSON keys.
+Prevention: source-preview, multiline/PEM, property-key collision, nested Git root and partial-batch regressions; stale mapping completions reject changes to a newer project connection.

@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
+import { mapGenericSources, sourceCategory } from "./source-map.js";
 import type {
   Graph,
   GraphEdge,
@@ -16,8 +17,8 @@ export const LEARNING_REVISION = "5968d231fae50fa3364470fbf0377968630aff6d";
 export const LEARNING_REPO = "APareek89/agentic-learning-studio";
 const MAX_FILE_BYTES = 900_000;
 const excluded =
-  /(^|\/)(?:\.git|node_modules|dist|build|coverage|\.next|\.env[^/]*|[^/]*(?:secret|credential)[^/]*)(\/|$)/i;
-const supported = /\.(?:[cm]?[jt]sx?|json|md|css|html|sql)$/i;
+  /(^|\/)(?:\.git|node_modules|dist|build|coverage|\.next|\.venv|venv|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.local|\.cache|output|outputs|vendor|\.env[^/]*|[^/]*(?:secret|credential|access.?keys)[^/]*)(\/|$)/i;
+const supported = /\.(?:[cm]?[jt]sx?|py|json|md|css|html|sql|toml|ya?ml)$/i;
 
 /** Metadata only: never read .env, credentials, git configuration or symlink targets as source. */
 export async function sourceFiles(root: string): Promise<string[]> {
@@ -26,7 +27,15 @@ export async function sourceFiles(root: string): Promise<string[]> {
     if (depth > 6 || files.length >= 500) return;
     for (const entry of (
       await readdir(directory, { withFileTypes: true })
-    ).sort((a, b) => a.name.localeCompare(b.name))) {
+    ).sort((a, b) => {
+      const rank = (name: string) =>
+        /^(?:src|server|app|api|lib|agents|tools|workflows)$/.test(name)
+          ? 0
+          : /^(?:docs|kb|public|static|tests|evals|scripts)$/.test(name)
+            ? 2
+            : 1;
+      return rank(a.name) - rank(b.name) || a.name.localeCompare(b.name);
+    })) {
       if (files.length >= 500) break;
       const relative = path
         .relative(root, path.join(directory, entry.name))
@@ -40,7 +49,7 @@ export async function sourceFiles(root: string): Promise<string[]> {
     }
   };
   await walk(root);
-  return files;
+  return files.sort();
 }
 
 export async function readSource(
@@ -81,11 +90,11 @@ async function git(root: string, args: string[]): Promise<string> {
 function category(file: string): string {
   if (/^public\//.test(file)) return "UI";
   if (/\.md$/i.test(file)) return "Documentation";
-  if (/auth/i.test(file)) return "Authentication";
+  if (/(?:^|\/)auth(?:[./_-]|$)/i.test(file)) return "Authentication";
   if (/^(?:supabase|src\/rag)\/|\/db\./.test(file)) return "Data / retrieval";
   if (/^src\/agent\//.test(file)) return "Agent workflow";
   if (/^src\/render\//.test(file)) return "Rendering";
-  return "Supporting code";
+  return sourceCategory(file);
 }
 
 function lineOf(text: string, symbol: string): number {
@@ -108,15 +117,27 @@ export async function discoverRepo(
     throw new Error("Choose a local repository directory.");
   const files = await sourceFiles(root);
   if (!files.length) throw new Error("No supported source files found.");
-  const revision = await git(root, ["rev-parse", "HEAD"]).catch(
-    () => "unversioned",
-  );
+  // Uploaded folders live beneath the workbench checkout. Never inherit its Git identity.
+  const gitRoot = await git(root, ["rev-parse", "--show-toplevel"])
+    .then(realpath)
+    .catch(() => "");
+  const ownsGit = gitRoot === root;
+  const revision = ownsGit
+    ? await git(root, ["rev-parse", "HEAD"]).catch(() => "unversioned")
+    : "unversioned";
   const packageText = files.includes("package.json")
     ? await readSource(root, "package.json")
     : "{}";
-  let packageName = path.basename(root);
+  const remoteName = ownsGit
+    ? await git(root, ["remote", "get-url", "origin"])
+        .then((url) => /(?:\/|:)([\w.-]+?)(?:\.git)?$/.exec(url)?.[1])
+        .catch(() => undefined)
+    : undefined;
+  let packageName = remoteName || path.basename(root);
   try {
-    packageName = JSON.parse(packageText).name || packageName;
+    const name = JSON.parse(packageText).name;
+    if (typeof name === "string" && name.trim())
+      packageName = name.slice(0, 120);
   } catch {
     /* discovery can retain malformed source */
   }
@@ -305,6 +326,14 @@ export async function discoverRepo(
     connect("architect", "moduleWriter", "dynamic worker pool");
     connect("architect", "overviewProse", "parallel prose");
     connect("architect", "architect", "bounded parse retry", "feedback");
+  } else {
+    const discovered = await mapGenericSources(files, (file) =>
+      readSource(root, file),
+    );
+    nodes.push(...discovered.nodes);
+    edges.push(...discovered.edges);
+    repo.coverage = discovered.coverage;
+    repo.limitations.push(...discovered.limitations);
   }
   const represented = new Set(
     nodes.flatMap((n) => (n.source ? [n.source.path] : [])),
@@ -322,7 +351,15 @@ export async function discoverRepo(
     for (const node of nodes.filter(
       (n) => n.id !== id && n.source?.path === file,
     ))
-      connect(node.id, id, "implemented_by", "dependency", "declared");
+      if (
+        !edges.some(
+          (edge) =>
+            edge.source === node.id &&
+            edge.target === id &&
+            edge.kind === "dependency",
+        )
+      )
+        connect(node.id, id, "implemented_by", "dependency", "declared");
     if (isLearning && /src\/lib\/(?:auth|db|credits|langfuse)\.ts/.test(file))
       connect(
         "overview",
@@ -331,7 +368,7 @@ export async function discoverRepo(
         "dependency",
       );
   }
-  if (!isLearning)
+  if (!isLearning && !nodes.some((node) => !node.hidden))
     nodes.unshift({
       id: "unknown-entry",
       label: "Execution entry unresolved",
@@ -356,7 +393,7 @@ export async function discoverRepo(
     name: repo.name,
     description: isLearning
       ? "Source-linked application map. Overview can execute at the inspected revision; build and other routes are discovery only."
-      : "Read-only source map; execution adapter unavailable.",
+      : "Read-only source workflow map: parsed functions, routes and calls. Inferred/source-declared relationships are not observed execution; execution adapter unavailable.",
     nodes,
     edges,
     limits: {

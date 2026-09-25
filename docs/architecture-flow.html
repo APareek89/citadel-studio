@@ -20,7 +20,8 @@ API["IMPLEMENTED · Local API boundary&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: browse
 MODE{"IMPLEMENTED · Operation selection&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: requested mode&lt;br/&gt;out: owning module"}:::dec
 ALIGN["IMPLEMENTED · Alignment and generation&lt;br/&gt;[AGENT · selected config.model]&lt;br/&gt;in: brief and answers&lt;br/&gt;out: questions, assumptions and graph&lt;br/&gt;see diagram 05"]:::agent
 RUN["IMPLEMENTED · Manifest execution&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: graph snapshot and input&lt;br/&gt;out: invocation events and terminal result&lt;br/&gt;see diagram 03"]:::fn
-REPO["IMPLEMENTED · Source discovery and trusted adapter&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: selected local repository&lt;br/&gt;out: source map or isolated overview run&lt;br/&gt;see diagram 04"]:::fn
+REPO["IMPLEMENTED · Source acquisition and mapping&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: GitHub, local checkout or folder upload&lt;br/&gt;out: source evidence, interpreted map or supported adapter request&lt;br/&gt;see diagram 04"]:::fn
+OBSERVE["IMPLEMENTED · External trace ingestion&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: native span token or Langfuse project keys&lt;br/&gt;out: recorded external spans; never app execution&lt;br/&gt;see diagram 08"]:::fn
 MODES["IMPLEMENTED · Compare, eval and red-team coordination&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: 2–5 candidates, 1–20 cases or up to 6 approved probes&lt;br/&gt;out: runs with grouped evidence&lt;br/&gt;see diagram 05"]:::fn
 EXPORT["IMPLEMENTED · Portable project export&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: supported project revision&lt;br/&gt;out: secret-free runnable ZIP&lt;br/&gt;see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: bounded request and credential ID&lt;br/&gt;out: model text and usage&lt;br/&gt;see diagram 02"]:::fn
@@ -30,11 +31,13 @@ UI --&gt; API --&gt; MODE
 MODE --&gt;|"Build alignment"| ALIGN
 MODE --&gt;|"Build execution"| RUN
 MODE --&gt;|"Connect and Debug"| REPO
+MODE --&gt;|"Connect live traces"| OBSERVE
 MODE --&gt;|"Model Lab, Evals, Red Team"| MODES
 MODE --&gt;|"Launch download"| EXPORT
 ALIGN --&gt; PROVIDER
 RUN --&gt; PROVIDER
-REPO --&gt;|"only mediated model calls"| PROVIDER
+REPO --&gt;|"AI mapping or mediated adapter model calls"| PROVIDER
+OBSERVE --&gt; STORE
 MODES --&gt; RUN
 MODES --&gt;|"source-owned campaigns"| REPO
 MODES --&gt;|"planner or judge"| PROVIDER
@@ -131,17 +134,23 @@ classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
 classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
 classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 </pre>
-<h2>04 IMPLEMENTED — source map and narrowly trusted Learning Studio execution</h2>
-<pre class="mermaid">%% 04 IMPLEMENTED — source map and narrowly trusted Learning Studio execution
+<h2>04 IMPLEMENTED — source acquisition, AI interpretation and separate trusted execution</h2>
+<pre class="mermaid">%% 04 IMPLEMENTED — source acquisition, AI interpretation and separate trusted execution
 flowchart TD
-SOURCE{"Repository source?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: local path, GitHub URL or picker choice&lt;br/&gt;out: local discovery or managed acquisition"}:::dec
-CATALOG["List GitHub repositories&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: existing authenticated gh login&lt;br/&gt;out: at most 100 account repositories; 30-second deadline"]:::fn
+SOURCE{"Repository source?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: local path, GitHub choice or uploaded folder&lt;br/&gt;out: source acquisition path"}:::dec
+AUTH["Validate source account&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: session PAT or existing local gh login&lt;br/&gt;out: account identity; session PAT held in memory"]:::fn
+CATALOG["List accessible GitHub repositories&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: validated account&lt;br/&gt;out: at most 100 public/private repository choices"]:::fn
 URL["Validate GitHub identity&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: HTTPS github.com owner/repository URL&lt;br/&gt;out: normalized identity; reject credentials, escapes and extra paths"]:::fn
 CLONE["Acquire or reuse managed checkout&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: validated identity and per-repository lock&lt;br/&gt;out: verified local source directory&lt;br/&gt;shallow clone; 90-second deadline; 2MB CLI output cap"]:::fn
 ISOLATE["Enforce Git acquisition boundary&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: checkout and origin/config checks&lt;br/&gt;out: source only; no hooks, filters, submodules or repo scripts&lt;br/&gt;existing checkouts preserved; atomic publication"]:::fn
 PATH["Resolve selected local checkout&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: local or managed repository path&lt;br/&gt;out: canonical directory"]:::fn
+UPLOAD["Validate folder text upload&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: portable relative paths and text&lt;br/&gt;out: private separate source copy plus skip counts&lt;br/&gt;at most 500 files, 900000 bytes each and 10 MiB total"]:::fn
 FILES["Discover source resources&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: repository directory&lt;br/&gt;out: at most 500 files, depth at most 6&lt;br/&gt;excludes secrets, symlinks and generated/dependency folders"]:::fn
-MAP["Build source-linked graph&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: recognized paths and symbols&lt;br/&gt;out: workflow nodes plus collapsed UI, DB/auth and Markdown"]:::fn
+AST["Extract bounded source evidence&lt;br/&gt;[LIBRARY · TypeScript AST and isolated Python ast.parse]&lt;br/&gt;in: at most 220 files and 12 MB source&lt;br/&gt;out: candidates, declared/inferred calls and source references&lt;br/&gt;repository code never executes"]:::data
+METHOD{"Mapping mode?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: user choice and model configuration&lt;br/&gt;out: AI interpretation or static candidates"}:::dec
+MODEL["Interpret meaningful workflow stages&lt;br/&gt;[AGENT · selected small config.model]&lt;br/&gt;in: scrubbed excerpts and candidate evidence&lt;br/&gt;out: at most 20 proposed workflow stages"]:::agent
+VERIFY["Validate proposal coverage&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: proposed nodes, references and relationships&lt;br/&gt;out: validated assignments; unknown candidates retained&lt;br/&gt;source paths/lines, unique IDs and valid edges checked"]:::fn
+MAP["Retain source-owned graph&lt;br/&gt;[DATA · versioned graph and coverage]&lt;br/&gt;in: validated interpretation or static candidates&lt;br/&gt;out: core workflow, hidden resources and unresolved disclosure&lt;br/&gt;inferred structure is not observed execution"]:::data
 TRUST{"Approved source and platform?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: adapter, pinned revision and 14 allowlisted files&lt;br/&gt;out: isolated execution or discovery only&lt;br/&gt;macOS sandbox-exec required"}:::dec
 OPAQUE["Retain discovery-only map&lt;br/&gt;[DATA · source references]&lt;br/&gt;in: unsupported or changed source&lt;br/&gt;out: coverage and opaque components; no execution"]:::term
 GIT["Read exact committed source&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: approved revision and source allowlist&lt;br/&gt;out: source matching current files&lt;br/&gt;replacement objects disabled; inherited GIT overrides removed"]:::fn
@@ -153,10 +162,13 @@ ART["Render isolated overview artifact&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: origin
 RESULT["Return overview result and trace&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: artifact and observed invocation events&lt;br/&gt;out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
 CLEAN["Force-stop and remove scratch files&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: error, cancellation or 120-second deadline&lt;br/&gt;out: terminated worker and preserved partial trace"]:::term
 SOURCE --&gt;|"local path"| PATH
-SOURCE --&gt;|"GitHub picker"| CATALOG --&gt; URL
-SOURCE --&gt;|"GitHub URL"| URL
+SOURCE --&gt;|"GitHub picker or private URL"| AUTH --&gt; CATALOG --&gt; URL
+SOURCE --&gt;|"folder upload"| UPLOAD --&gt; PATH
 URL --&gt; CLONE --&gt; ISOLATE --&gt; PATH
-PATH --&gt; FILES --&gt; MAP --&gt; TRUST
+PATH --&gt; FILES --&gt; AST --&gt; METHOD
+METHOD --&gt;|"AI workflow map"| MODEL --&gt; VERIFY --&gt; MAP
+METHOD --&gt;|"static discovery; no inference"| MAP
+MAP --&gt;|"explicit supported run request only"| TRUST
 TRUST --&gt;|"unsupported or mismatched"| OPAQUE
 TRUST --&gt;|"approved overview only"| GIT --&gt; BUNDLE --&gt; OS --&gt; BRIDGE
 BRIDGE --&gt;|"model request"| LLM
@@ -265,6 +277,41 @@ CHECK --&gt;|"yes"| START --&gt; LIMIT --&gt; RESULT
 RESULT --&gt;|"success"| CLEAN
 RESULT --&gt;|"failure or cancellation"| CLEAN
 CLEAN --&gt; RETURN
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<h2>08 IMPLEMENTED — external observations, separate from source mapping and execution</h2>
+<pre class="mermaid">%% 08 IMPLEMENTED — external observations, separate from source mapping and execution
+flowchart TD
+METHOD{"Trace connection?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: selected workbench project&lt;br/&gt;out: native receiver or manual Langfuse import"}:::dec
+TOKEN["Issue project receiver token&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: explicit create or replace action&lt;br/&gt;out: loopback endpoint and token; replacement revokes prior token"]:::fn
+WRAP["Configure existing app instrumentation&lt;br/&gt;[DATA · server environment and downloaded JS/Python helper]&lt;br/&gt;in: endpoint, token and actual app functions&lt;br/&gt;out: wrappers for real operations; no automatic code injection"]:::data
+APP["Execute in source application&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: request handled by the existing app&lt;br/&gt;out: running, completed or failed spans&lt;br/&gt;workbench does not start or stop this app"]:::fn
+POST["Deliver native batch&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: spans and project Bearer token&lt;br/&gt;out: authenticated local HTTP request&lt;br/&gt;helper timeout 3 seconds; app must reach local receiver"]:::fn
+NATIVE{"Native batch valid?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: token, span identity, times and parents&lt;br/&gt;out: accept or reject&lt;br/&gt;200 spans / 1 MB batch; 1000 spans / 3 MB trace"}:::dec
+URL{"Langfuse base URL allowed?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: base URL without credentials/path/query&lt;br/&gt;out: allowed Cloud region or localhost&lt;br/&gt;HTTPS Cloud allowlist; local HTTP/HTTPS only"}:::dec
+KEYS["Validate Langfuse project access&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: public/secret keys held in server memory&lt;br/&gt;out: connected project metadata"]:::fn
+SYNC["Request observation snapshot&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: manual Sync recent traces action&lt;br/&gt;out: observations API v2 pages from preceding 24 hours&lt;br/&gt;at most 3 pages of 100; 12 seconds / 5 MB per response"]:::fn
+PARTIAL["Normalize partial observations&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: source trace/span IDs and reported I/O/usage&lt;br/&gt;out: validated bounded trace snapshots&lt;br/&gt;time windows and missing parents remain disclosed"]:::fn
+RECORD["Persist redacted observation evidence&lt;br/&gt;[DATA · local runs and event journal]&lt;br/&gt;in: accepted native spans or imported observations&lt;br/&gt;out: source associations, status, input/output and reported usage"]:::data
+VIEW["Inspect observed hierarchy&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: stored external spans and optional source map&lt;br/&gt;out: node evidence; parent nesting is not proof of data flow"]:::term
+ERROR["Return explicit connection/import error&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: bad token, URL, payload or dependency failure&lt;br/&gt;out: failure without executing imported code"]:::term
+RESTART["Reconnect after server restart&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: cleared session integration credentials&lt;br/&gt;out: new receiver token or revalidated Langfuse keys&lt;br/&gt;saved observation evidence remains"]:::term
+METHOD --&gt;|"native"| TOKEN --&gt; WRAP --&gt; APP --&gt; POST --&gt; NATIVE
+NATIVE --&gt;|"valid; completed native traces immutable"| RECORD
+NATIVE --&gt;|"invalid"| ERROR
+METHOD --&gt;|"Langfuse"| URL
+URL --&gt;|"allowed"| KEYS --&gt; SYNC --&gt; PARTIAL --&gt; RECORD
+URL --&gt;|"unsupported host or URL shape"| ERROR
+KEYS -.-&gt;|"authentication failure"| ERROR
+SYNC -.-&gt;|"timeout, malformed or oversized response"| ERROR
+RECORD --&gt; VIEW
+TOKEN -.-&gt;|"session ends"| RESTART
+KEYS -.-&gt;|"session ends"| RESTART
 classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
 classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
 classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;

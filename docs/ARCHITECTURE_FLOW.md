@@ -8,9 +8,11 @@ The user selected a standalone viewer; no in-app debug tab is included. The gene
 
 ## Source and export implementation
 
-GitHub acquisition is now implemented in `server/github.ts` and wired into `server/index.ts`: the UI can list repositories through the existing authenticated `gh` CLI or connect a strict HTTPS GitHub URL. The service clones into private managed storage before handing the local path to discovery. It disables inherited Git configuration, hooks, templates and submodules, validates the origin and serializes concurrent publication. Existing managed checkouts are reused unchanged. The source-adapter trust gate still applies after cloning; download is not execution authorization.
+GitHub acquisition accepts a validated personal access token held in server memory or the existing authenticated `gh` CLI login. The repository picker includes accessible public and private repositories; a strict HTTPS GitHub URL can also be supplied. The service clones into private managed storage before discovery. It disables inherited Git configuration, hooks, templates, filters and submodules, validates the origin and serializes concurrent publication. Existing managed checkouts are reused unchanged. Local paths and filtered folder uploads are separate acquisition options. Download or upload is not execution authorization.
 
-Diagram 04 now includes both GitHub acquisition and the local discovery boundary. Its Mermaid source and canonical block are synchronized; regenerate the standalone viewer with the commands below after any further diagram edit.
+Diagram 04 separates acquisition, source evidence, AI interpretation and the existing trusted execution adapter. Local TypeScript/JavaScript and isolated Python parsing extract bounded candidates without executing repository code. The selected small model groups scrubbed source evidence into at most 20 proposed workflow nodes; deterministic checks validate references and retain unassigned candidates in an unresolved coverage group. Hidden supporting files remain part of the source map. Static discovery remains available without inference. No source map promises exhaustive runtime coverage.
+
+Diagram 08 covers native JavaScript/Python instrumentation and manual Langfuse observations v2 import. The existing application runs in its own environment; it must reach the loopback receiver or already send observations to Langfuse. Integration keys are held in server memory and must be reconnected after restart. Langfuse imports remain partial snapshots, and span parent relationships do not establish data flow. See [CONNECTIONS.md](CONNECTIONS.md) for setup, URL restrictions, limits and examples.
 
 The manifest export now contains a CLI and a minimal local browser wrapper (`npm run serve`), alongside the shared graph executor, validation, dependencies and empty environment template. The support-app ZIP passed a clean-directory install, graph test and one live CLI sample. Diagram 06's planned **automatic** readiness gate remains accurate: the export endpoint does not run these checks for each download. The browser wrapper additionally passed free HTTP boundary and interrupted-upload regression checks. Interactive model-backed browser acceptance remains separate from the recorded CLI evidence. Source-owned imports are explicitly rejected by export.
 
@@ -20,21 +22,25 @@ Current evidence, live-versus-mocked provider coverage, the inconclusive connect
 
 Blue: a model generates or judges. Green: deterministic code. Purple diamonds: conditions with a named enforcer. Pale purple: a library or data store. Cyan: a question returned to the user. Gray: terminal outcome. Each box declares its input and output. `config.model` names the model chosen for that run; there is no hard-coded universal model.
 
-New applications are manifest-owned; imported applications are source-owned. A resource/dependency edge supplies architectural context and does not itself schedule work. Only supporting resource nodes may be hidden; executable policy nodes cannot disappear from the scheduler through a visibility setting. Hidden resources remain searchable. Recorded invocation output is evidence of one run, not proof that every possible path is represented.
+New applications are manifest-owned; imported applications are source-owned. A resource/dependency edge supplies architectural context and does not itself schedule work. In executable manifests, only supporting resource nodes may be hidden; executable policy nodes cannot disappear from the scheduler through a visibility setting. Imported maps retain supporting files and unresolved source references without treating them as scheduled nodes. Hidden resources remain searchable. Recorded invocation output is evidence of one run, not proof that every possible path is represented. External span parents show reported hierarchy, not a verified data-flow dependency.
 
 ## Gates at a glance
 
 | Gate | Enforcer and threshold | Source |
 | --- | --- | --- |
-| Graph structure | Zod: 1–80 nodes, at most 160 edges; only resource nodes may be hidden; output and feedback checks | `server/graph.ts` |
+| Manifest graph structure | Zod: 1–80 nodes, at most 160 edges; only resource nodes may be hidden; output and feedback checks | `server/graph.ts` |
 | Model/run input | Validated credential, available text model, non-empty input at most 40,000 characters | `server/runs.ts` |
 | Run pressure | At most 12 active runs; at most 3 provider calls active globally | `server/runs.ts` |
 | Graph budgets | 1–30 model calls, 0–3 semantic revisions, 1–180 seconds, 64–16,000 output tokens | `server/graph.ts` |
 | Dollar limits | Graph cap reserves before dispatch; optional `WORKBENCH_SPEND_LIMIT_USD` adds a persistent global ledger and rejects unknown pricing | `server/runs.ts`, `server/providers.ts` |
 | Provider input | Combined system/input at most 120,000 characters; call deadline at most 90 seconds | `server/providers.ts`, `server/runs.ts` |
 | Source discovery | At most 500 files, depth at most 6; source reads at most 900,000 bytes | `server/importer.ts` |
+| Folder upload | At most 500 text files, 900,000 bytes each, 10 MiB total; safe relative paths and no collisions | `server/uploads.ts` |
+| Source interpretation | Parse at most 220 files / 12 MB; at most 20 proposed semantic nodes; source and candidate validation; unresolved evidence retained | `server/source-map.ts`, `server/semantic-map.ts` |
 | Trusted import | Approved revision and 14-file allowlist, unchanged current contents, macOS sandbox | `server/importer.ts`, `server/learning-runner.ts` |
 | Imported execution | Input at most 20,000 characters; at most 6 model requests; 120 seconds | `server/learning-runner.ts` |
+| Native observations | Project token; 200 spans / 1 MB per batch, 1,000 spans / 3 MB per trace; valid times and acyclic parents | `server/telemetry.ts` |
+| Langfuse import | Cloud-region allowlist or localhost; observations v2; UI window 24 hours; at most 300 observations; 12 seconds / 5 MB per response | `server/langfuse.ts` |
 | Campaigns | 2–5 comparison slots; 1–20 eval cases; at most 6 red-team probes; shared budget at most 30 calls | `server/workflows.ts` |
 | Arbitrary code | Docker image required; no network; 128MB; 0.5 CPU; 32 PIDs; 15 seconds | `server/sandbox.ts` |
 
@@ -47,10 +53,11 @@ These are implementation limits, not promises of exact provider billing or compl
 | Master | `01-master.mmd` | `web/App.tsx`, `server/index.ts`, shared services |
 | Credentials/providers | `02-credentials-providers.mmd` | `server/providers.ts` |
 | Manifest execution | `03-manifest-runtime.mmd` | `server/graph.ts`, `server/runtime.ts`, `server/runs.ts`, `server/store.ts` |
-| Source import | `04-imported-source.mmd` | `server/github.ts`, `server/importer.ts`, `server/learning-runner.ts` |
+| Source acquisition/mapping | `04-imported-source.mmd` | `server/github.ts`, `server/uploads.ts`, `server/importer.ts`, `server/source-map.ts`, `server/semantic-map.ts`, `server/learning-runner.ts` |
 | Product modes | `05-product-modes.mmd` | `server/workflows.ts`, `web/App.tsx` |
 | Export/hosting | `06-export-hosting.mmd` | `server/export.ts`; automatic readiness gate and AWS remain planned |
 | Code sandbox | `07-custom-code-sandbox.mmd` | `server/sandbox.ts` |
+| External observations | `08-external-observation.mmd` | `server/telemetry.ts`, `server/langfuse.ts`, `sdk/workbench-client.mjs`, `sdk/workbench-client.py` |
 
 ## Diagrams
 
@@ -65,7 +72,8 @@ API["IMPLEMENTED · Local API boundary<br/>[FUNCTION]<br/>in: browser request on
 MODE{"IMPLEMENTED · Operation selection<br/>[FUNCTION]<br/>in: requested mode<br/>out: owning module"}:::dec
 ALIGN["IMPLEMENTED · Alignment and generation<br/>[AGENT · selected config.model]<br/>in: brief and answers<br/>out: questions, assumptions and graph<br/>see diagram 05"]:::agent
 RUN["IMPLEMENTED · Manifest execution<br/>[FUNCTION]<br/>in: graph snapshot and input<br/>out: invocation events and terminal result<br/>see diagram 03"]:::fn
-REPO["IMPLEMENTED · Source discovery and trusted adapter<br/>[FUNCTION]<br/>in: selected local repository<br/>out: source map or isolated overview run<br/>see diagram 04"]:::fn
+REPO["IMPLEMENTED · Source acquisition and mapping<br/>[FUNCTION]<br/>in: GitHub, local checkout or folder upload<br/>out: source evidence, interpreted map or supported adapter request<br/>see diagram 04"]:::fn
+OBSERVE["IMPLEMENTED · External trace ingestion<br/>[FUNCTION]<br/>in: native span token or Langfuse project keys<br/>out: recorded external spans; never app execution<br/>see diagram 08"]:::fn
 MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/>in: 2–5 candidates, 1–20 cases or up to 6 approved probes<br/>out: runs with grouped evidence<br/>see diagram 05"]:::fn
 EXPORT["IMPLEMENTED · Portable project export<br/>[FUNCTION]<br/>in: supported project revision<br/>out: secret-free runnable ZIP<br/>see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway<br/>[FUNCTION]<br/>in: bounded request and credential ID<br/>out: model text and usage<br/>see diagram 02"]:::fn
@@ -75,11 +83,13 @@ UI --> API --> MODE
 MODE -->|"Build alignment"| ALIGN
 MODE -->|"Build execution"| RUN
 MODE -->|"Connect and Debug"| REPO
+MODE -->|"Connect live traces"| OBSERVE
 MODE -->|"Model Lab, Evals, Red Team"| MODES
 MODE -->|"Launch download"| EXPORT
 ALIGN --> PROVIDER
 RUN --> PROVIDER
-REPO -->|"only mediated model calls"| PROVIDER
+REPO -->|"AI mapping or mediated adapter model calls"| PROVIDER
+OBSERVE --> STORE
 MODES --> RUN
 MODES -->|"source-owned campaigns"| REPO
 MODES -->|"planner or judge"| PROVIDER
@@ -186,16 +196,22 @@ classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 <!-- diagram: 04-imported-source.mmd -->
 
 ```mermaid
-%% 04 IMPLEMENTED — source map and narrowly trusted Learning Studio execution
+%% 04 IMPLEMENTED — source acquisition, AI interpretation and separate trusted execution
 flowchart TD
-SOURCE{"Repository source?<br/>[FUNCTION]<br/>in: local path, GitHub URL or picker choice<br/>out: local discovery or managed acquisition"}:::dec
-CATALOG["List GitHub repositories<br/>[FUNCTION]<br/>in: existing authenticated gh login<br/>out: at most 100 account repositories; 30-second deadline"]:::fn
+SOURCE{"Repository source?<br/>[FUNCTION]<br/>in: local path, GitHub choice or uploaded folder<br/>out: source acquisition path"}:::dec
+AUTH["Validate source account<br/>[FUNCTION]<br/>in: session PAT or existing local gh login<br/>out: account identity; session PAT held in memory"]:::fn
+CATALOG["List accessible GitHub repositories<br/>[FUNCTION]<br/>in: validated account<br/>out: at most 100 public/private repository choices"]:::fn
 URL["Validate GitHub identity<br/>[FUNCTION]<br/>in: HTTPS github.com owner/repository URL<br/>out: normalized identity; reject credentials, escapes and extra paths"]:::fn
 CLONE["Acquire or reuse managed checkout<br/>[FUNCTION]<br/>in: validated identity and per-repository lock<br/>out: verified local source directory<br/>shallow clone; 90-second deadline; 2MB CLI output cap"]:::fn
 ISOLATE["Enforce Git acquisition boundary<br/>[FUNCTION]<br/>in: checkout and origin/config checks<br/>out: source only; no hooks, filters, submodules or repo scripts<br/>existing checkouts preserved; atomic publication"]:::fn
 PATH["Resolve selected local checkout<br/>[FUNCTION]<br/>in: local or managed repository path<br/>out: canonical directory"]:::fn
+UPLOAD["Validate folder text upload<br/>[FUNCTION]<br/>in: portable relative paths and text<br/>out: private separate source copy plus skip counts<br/>at most 500 files, 900000 bytes each and 10 MiB total"]:::fn
 FILES["Discover source resources<br/>[FUNCTION]<br/>in: repository directory<br/>out: at most 500 files, depth at most 6<br/>excludes secrets, symlinks and generated/dependency folders"]:::fn
-MAP["Build source-linked graph<br/>[FUNCTION]<br/>in: recognized paths and symbols<br/>out: workflow nodes plus collapsed UI, DB/auth and Markdown"]:::fn
+AST["Extract bounded source evidence<br/>[LIBRARY · TypeScript AST and isolated Python ast.parse]<br/>in: at most 220 files and 12 MB source<br/>out: candidates, declared/inferred calls and source references<br/>repository code never executes"]:::data
+METHOD{"Mapping mode?<br/>[FUNCTION]<br/>in: user choice and model configuration<br/>out: AI interpretation or static candidates"}:::dec
+MODEL["Interpret meaningful workflow stages<br/>[AGENT · selected small config.model]<br/>in: scrubbed excerpts and candidate evidence<br/>out: at most 20 proposed workflow stages"]:::agent
+VERIFY["Validate proposal coverage<br/>[FUNCTION]<br/>in: proposed nodes, references and relationships<br/>out: validated assignments; unknown candidates retained<br/>source paths/lines, unique IDs and valid edges checked"]:::fn
+MAP["Retain source-owned graph<br/>[DATA · versioned graph and coverage]<br/>in: validated interpretation or static candidates<br/>out: core workflow, hidden resources and unresolved disclosure<br/>inferred structure is not observed execution"]:::data
 TRUST{"Approved source and platform?<br/>[FUNCTION]<br/>in: adapter, pinned revision and 14 allowlisted files<br/>out: isolated execution or discovery only<br/>macOS sandbox-exec required"}:::dec
 OPAQUE["Retain discovery-only map<br/>[DATA · source references]<br/>in: unsupported or changed source<br/>out: coverage and opaque components; no execution"]:::term
 GIT["Read exact committed source<br/>[FUNCTION]<br/>in: approved revision and source allowlist<br/>out: source matching current files<br/>replacement objects disabled; inherited GIT overrides removed"]:::fn
@@ -207,10 +223,13 @@ ART["Render isolated overview artifact<br/>[FUNCTION]<br/>in: original schema-va
 RESULT["Return overview result and trace<br/>[FUNCTION]<br/>in: artifact and observed invocation events<br/>out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
 CLEAN["Force-stop and remove scratch files<br/>[FUNCTION]<br/>in: error, cancellation or 120-second deadline<br/>out: terminated worker and preserved partial trace"]:::term
 SOURCE -->|"local path"| PATH
-SOURCE -->|"GitHub picker"| CATALOG --> URL
-SOURCE -->|"GitHub URL"| URL
+SOURCE -->|"GitHub picker or private URL"| AUTH --> CATALOG --> URL
+SOURCE -->|"folder upload"| UPLOAD --> PATH
 URL --> CLONE --> ISOLATE --> PATH
-PATH --> FILES --> MAP --> TRUST
+PATH --> FILES --> AST --> METHOD
+METHOD -->|"AI workflow map"| MODEL --> VERIFY --> MAP
+METHOD -->|"static discovery; no inference"| MAP
+MAP -->|"explicit supported run request only"| TRUST
 TRUST -->|"unsupported or mismatched"| OPAQUE
 TRUST -->|"approved overview only"| GIT --> BUNDLE --> OS --> BRIDGE
 BRIDGE -->|"model request"| LLM
@@ -336,6 +355,44 @@ classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
 classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 ```
 
+<!-- diagram: 08-external-observation.mmd -->
+
+```mermaid
+%% 08 IMPLEMENTED — external observations, separate from source mapping and execution
+flowchart TD
+METHOD{"Trace connection?<br/>[FUNCTION]<br/>in: selected workbench project<br/>out: native receiver or manual Langfuse import"}:::dec
+TOKEN["Issue project receiver token<br/>[FUNCTION]<br/>in: explicit create or replace action<br/>out: loopback endpoint and token; replacement revokes prior token"]:::fn
+WRAP["Configure existing app instrumentation<br/>[DATA · server environment and downloaded JS/Python helper]<br/>in: endpoint, token and actual app functions<br/>out: wrappers for real operations; no automatic code injection"]:::data
+APP["Execute in source application<br/>[FUNCTION]<br/>in: request handled by the existing app<br/>out: running, completed or failed spans<br/>workbench does not start or stop this app"]:::fn
+POST["Deliver native batch<br/>[FUNCTION]<br/>in: spans and project Bearer token<br/>out: authenticated local HTTP request<br/>helper timeout 3 seconds; app must reach local receiver"]:::fn
+NATIVE{"Native batch valid?<br/>[FUNCTION]<br/>in: token, span identity, times and parents<br/>out: accept or reject<br/>200 spans / 1 MB batch; 1000 spans / 3 MB trace"}:::dec
+URL{"Langfuse base URL allowed?<br/>[FUNCTION]<br/>in: base URL without credentials/path/query<br/>out: allowed Cloud region or localhost<br/>HTTPS Cloud allowlist; local HTTP/HTTPS only"}:::dec
+KEYS["Validate Langfuse project access<br/>[FUNCTION]<br/>in: public/secret keys held in server memory<br/>out: connected project metadata"]:::fn
+SYNC["Request observation snapshot<br/>[FUNCTION]<br/>in: manual Sync recent traces action<br/>out: observations API v2 pages from preceding 24 hours<br/>at most 3 pages of 100; 12 seconds / 5 MB per response"]:::fn
+PARTIAL["Normalize partial observations<br/>[FUNCTION]<br/>in: source trace/span IDs and reported I/O/usage<br/>out: validated bounded trace snapshots<br/>time windows and missing parents remain disclosed"]:::fn
+RECORD["Persist redacted observation evidence<br/>[DATA · local runs and event journal]<br/>in: accepted native spans or imported observations<br/>out: source associations, status, input/output and reported usage"]:::data
+VIEW["Inspect observed hierarchy<br/>[FUNCTION]<br/>in: stored external spans and optional source map<br/>out: node evidence; parent nesting is not proof of data flow"]:::term
+ERROR["Return explicit connection/import error<br/>[FUNCTION]<br/>in: bad token, URL, payload or dependency failure<br/>out: failure without executing imported code"]:::term
+RESTART["Reconnect after server restart<br/>[FUNCTION]<br/>in: cleared session integration credentials<br/>out: new receiver token or revalidated Langfuse keys<br/>saved observation evidence remains"]:::term
+METHOD -->|"native"| TOKEN --> WRAP --> APP --> POST --> NATIVE
+NATIVE -->|"valid; completed native traces immutable"| RECORD
+NATIVE -->|"invalid"| ERROR
+METHOD -->|"Langfuse"| URL
+URL -->|"allowed"| KEYS --> SYNC --> PARTIAL --> RECORD
+URL -->|"unsupported host or URL shape"| ERROR
+KEYS -.->|"authentication failure"| ERROR
+SYNC -.->|"timeout, malformed or oversized response"| ERROR
+RECORD --> VIEW
+TOKEN -.->|"session ends"| RESTART
+KEYS -.->|"session ends"| RESTART
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+```
+
 ## Regeneration and validation
 
 After editing these Mermaid fences, mirror each block into its named `.mmd` file. Then run:
@@ -345,13 +402,15 @@ node /Users/macbook/.agents/skills/power-coding/scripts/validate-mmd.mjs docs/me
 node /Users/macbook/.agents/skills/power-coding/scripts/build-html.mjs docs/mermaid docs/architecture-flow.html
 ```
 
-Verification at this snapshot: the real Mermaid parser passed all seven diagrams. Chromium rendered seven SVG diagrams with no Mermaid error nodes. The master diagram was visually inspected. Repeat these checks after changes; a successful parse alone does not establish readable layout. The viewer is a documentation artifact, not a runtime debug tab.
+The previous seven-diagram snapshot passed Mermaid parsing and Chromium rendering, with the master visually inspected. This source/connection update adds diagram 08 and changes diagrams 01 and 04. All eight diagrams pass the real Mermaid parser; the viewer was regenerated. No browser rendering or live connection check was performed during this documentation update. A successful parse alone does not establish readable layout. The viewer is a documentation artifact, not a runtime debug tab.
 
 ## Known boundaries
 
 - Metadata discovery is not proof of model inference compatibility; verified execution is a separate flag.
 - Phrase and schema checks cannot establish factual accuracy. Optional model judges remain fallible.
 - Local store permissions protect files from ordinary other-user access; this is not encrypted tenant storage.
+- Candidate inventory, parsed files and model excerpts are bounded. Valid source references do not prove the model grouped every responsibility correctly. Hidden resources and unresolved coverage remain inspectable.
+- Native tracing covers only instrumented operations and requires receiver reachability. Manual Langfuse snapshots may omit parents or older spans; imported observations never execute the source application.
 - The trusted imported overview disables retrieval and external persistence; full lesson generation remains discovery-only. Its macOS policy permits scoped read access plus root-directory metadata needed by the loader; network, file writes and child-process creation are denied. It is a reviewed-source adapter, not a general hostile-code sandbox.
 - Red-team specialists currently label different planned probe concerns; the source review is deterministic heuristics and semantic review uses the selected model. Separate autonomous specialist agents are not implemented.
 - Export assembly and a clean-directory CLI sample are verified for the support app. The browser wrapper has free HTTP-boundary and abort-survival coverage; interactive model-backed browser acceptance is separate. The download endpoint does not automatically enforce a readiness gate for each download.

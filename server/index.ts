@@ -1,6 +1,6 @@
 import express from "express";
 import { z, ZodError } from "zod";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { state, id, now, save, projectById } from "./store.js";
@@ -27,8 +27,31 @@ import {
   runRedTeam,
 } from "./workflows.js";
 import { exportProject } from "./export.js";
-import { discoverRepo } from "./importer.js";
-import { listGithubRepos, checkoutGithub } from "./github.js";
+import { discoverRepo, readSource } from "./importer.js";
+import {
+  listGithubRepos,
+  checkoutGithub,
+  githubStatus,
+  connectGithubToken,
+  disconnectGithubToken,
+  setGithubRedactionHook,
+} from "./github.js";
+import { importUploadedFolder } from "./uploads.js";
+import { registerIntegrationSecret } from "./integration-secrets.js";
+import {
+  createReceiver,
+  receiverStatus,
+  authorizeReceiver,
+  recordTrace,
+  disconnectReceiver,
+} from "./telemetry.js";
+import {
+  connectLangfuse,
+  disconnectLangfuse,
+  langfuseStatus,
+  syncLangfuse,
+} from "./langfuse.js";
+import { interpretMap, scrubSource } from "./semantic-map.js";
 import type {
   Project,
   Provider,
@@ -58,6 +81,8 @@ app.use((req, res, next) => {
     return res.status(415).json({ error: "Use application/json" });
   next();
 });
+setGithubRedactionHook(registerIntegrationSecret);
+app.use("/api/repos/upload", express.json({ limit: "16mb" }));
 app.use(express.json({ limit: "2mb" }));
 const configSchema = z.object({
   credentialId: z.string().min(1),
@@ -214,6 +239,11 @@ app.get("/api/runs/:id", (req, res) =>
   res.json(find(state.runs, req.params.id)),
 );
 app.post("/api/runs/:id/cancel", (req, res) => {
+  if (state.runs.find((r) => r.id === req.params.id)?.external)
+    return res.status(409).json({
+      error:
+        "This is an observed external run. Cancel it in the source application.",
+    });
   const run = cancelRun(req.params.id);
   if (!run) return res.status(404).json({ error: "Run not found" });
   res.json(run);
@@ -235,6 +265,224 @@ app.get("/api/runs/:id/events", (req, res) => {
 app.get(
   "/api/projects/:id/export",
   async (req, res) => await exportProject(projectById(req.params.id), res),
+);
+async function mapSource(
+  root: string,
+  mapping: "ai" | "static",
+  config?: z.infer<typeof configSchema>,
+) {
+  const source = await discoverRepo(root);
+  if (mapping === "ai") {
+    if (!config)
+      throw new Error(
+        "Add a validated model credential for AI mapping, or choose source inventory only.",
+      );
+    try {
+      return await interpretMap(source, config);
+    } catch (error) {
+      const candidates = source.graph.nodes.filter(
+        (n) => !n.hidden && n.source && n.role !== "resource",
+      ).length;
+      source.repo.mapping = {
+        method: "static",
+        discoveredFiles: source.repo.sources.length,
+        candidates,
+        mappedCandidates: 0,
+        unresolvedCandidates: candidates,
+        sourceFilesRead: 0,
+        truncated: true,
+        notes: [
+          "Source access succeeded. AI mapping failed; source candidates remain available. Retry AI mapping or inspect the source inventory.",
+        ],
+        error: redact((error as Error).message),
+      };
+    }
+  } else if (!source.repo.mapping) {
+    const candidates = source.graph.nodes.filter(
+      (n) => !n.hidden && n.source && n.role !== "resource",
+    ).length;
+    source.repo.mapping = {
+      method: "static",
+      discoveredFiles: source.repo.sources.length,
+      candidates,
+      mappedCandidates: 0,
+      unresolvedCandidates: candidates,
+      sourceFilesRead: 0,
+      truncated: false,
+      notes: [
+        "Deterministic source candidates only. Choose AI workflow map for semantic interpretation.",
+      ],
+    };
+  }
+  return source;
+}
+app.get("/api/github/status", async (_req, res) =>
+  res.json(await githubStatus()),
+);
+app.post("/api/github/token", async (req, res) =>
+  res.json(
+    await connectGithubToken(
+      z.object({ token: z.string().min(8).max(512) }).parse(req.body).token,
+    ),
+  ),
+);
+app.delete("/api/github/token", async (_req, res) => {
+  disconnectGithubToken();
+  res.json(await githubStatus());
+});
+app.post("/api/repos/upload", async (req, res) => {
+  const b = z
+    .object({
+      name: z.string().min(1).max(120),
+      files: z
+        .array(
+          z.object({ path: z.string().min(1).max(700), content: z.string() }),
+        )
+        .max(500),
+      mapping: z.enum(["ai", "static"]).default("static"),
+      config: configSchema.optional(),
+    })
+    .parse(req.body);
+  const upload = await importUploadedFolder({ name: b.name, files: b.files });
+  const discovered = await mapSource(upload.rootPath, b.mapping, b.config);
+  discovered.repo.sourceKind = "upload";
+  discovered.repo.name = upload.name;
+  discovered.graph.name = upload.name;
+  const p: Project = {
+    id: id("project"),
+    name: discovered.repo.name,
+    brief: discovered.graph.description,
+    ...discovered,
+    createdAt: now(),
+    updatedAt: now(),
+  };
+  state.projects.unshift(p);
+  save();
+  res.json({
+    ...p,
+    upload: {
+      acceptedFiles: upload.acceptedFiles,
+      skippedFiles: upload.skippedFiles,
+    },
+  });
+});
+app.post("/api/projects/:id/remap", async (req, res) => {
+  const p = projectById(req.params.id);
+  if (!p.repo) throw new Error("Connect source first.");
+  const b = z
+    .object({
+      mapping: z.enum(["ai", "static"]).default("static"),
+      config: configSchema.optional(),
+    })
+    .parse(req.body);
+  const priorGraph = p.graph,
+    priorRepo = p.repo;
+  const discovered = await mapSource(priorRepo.path, b.mapping, b.config);
+  if (p.graph !== priorGraph || p.repo !== priorRepo)
+    return res
+      .status(409)
+      .json({
+        error:
+          "Source changed while mapping. The newer connection was retained; refresh before trying again.",
+      });
+  if (p.repo.sourceKind === "upload") {
+    discovered.repo.sourceKind = "upload";
+    discovered.repo.name = p.repo.name;
+    discovered.graph.name = p.repo.name;
+  }
+  p.graph = {
+    ...discovered.graph,
+    id: priorGraph.id,
+    revision: priorGraph.revision + 1,
+  };
+  p.repo = discovered.repo;
+  if (/^[a-f0-9]{20,}$/.test(p.name)) p.name = discovered.repo.name;
+  p.updatedAt = now();
+  save();
+  res.json(p);
+});
+app.get("/api/projects/:id/source", async (req, res) => {
+  const project = projectById(req.params.id);
+  if (!project.repo) throw new Error("Connect source first.");
+  const query = z
+    .object({
+      path: z.string().min(1).max(700),
+      line: z.coerce.number().int().positive().optional(),
+    })
+    .parse(req.query);
+  if (!project.repo.sources.some((source) => source.path === query.path))
+    return res
+      .status(404)
+      .json({ error: "Source is not in this project's inventory." });
+  const lines = scrubSource(
+    await readSource(project.repo.path, query.path),
+  ).split("\n");
+  const line = Math.min(query.line || 1, Math.max(1, lines.length));
+  const startLine = Math.max(1, line - 20);
+  const slice = lines.slice(startLine - 1, line + 180).join("\n");
+  res.json({
+    path: query.path,
+    content: slice.slice(0, 40000),
+    startLine,
+    truncated:
+      startLine > 1 || line + 180 < lines.length || slice.length > 40000,
+  });
+});
+app.get("/api/projects/:id/connections", (req, res) =>
+  res.json({
+    native: receiverStatus(req.params.id),
+    langfuse: langfuseStatus(req.params.id),
+  }),
+);
+app.post("/api/projects/:id/telemetry/token", (req, res) =>
+  res.json(createReceiver(req.params.id)),
+);
+app.delete("/api/projects/:id/telemetry/token", (req, res) => {
+  disconnectReceiver(req.params.id);
+  res.json({ ok: true });
+});
+app.post("/api/telemetry/:id/spans", (req, res) => {
+  try {
+    authorizeReceiver(req.params.id, req.headers.authorization);
+  } catch {
+    return res.status(401).json({
+      error:
+        "Telemetry token is missing, expired or belongs to another project.",
+    });
+  }
+  const run = recordTrace(req.params.id, req.body);
+  res.json({
+    runId: run.id,
+    status: run.status,
+    spans: run.external?.spans.length,
+  });
+});
+app.get("/api/telemetry/client.mjs", (_req, res) => {
+  res.attachment("workbench-client.mjs");
+  res
+    .type("text/javascript")
+    .send(readFileSync("sdk/workbench-client.mjs", "utf8"));
+});
+app.get("/api/telemetry/client.py", (_req, res) => {
+  res.attachment("workbench_client.py");
+  res.type("text/plain").send(readFileSync("sdk/workbench-client.py", "utf8"));
+});
+app.post("/api/projects/:id/langfuse", async (req, res) =>
+  res.json(await connectLangfuse(req.params.id, req.body)),
+);
+app.delete("/api/projects/:id/langfuse", (req, res) => {
+  disconnectLangfuse(req.params.id);
+  res.json({ ok: true });
+});
+app.post("/api/projects/:id/langfuse/sync", async (req, res) =>
+  res.json(
+    await syncLangfuse(
+      req.params.id,
+      z
+        .object({ hours: z.number().int().min(1).max(168).default(24) })
+        .parse(req.body).hours,
+    ),
+  ),
 );
 app.get("/api/repos/github", async (_req, res) =>
   res.json(await listGithubRepos()),
@@ -259,15 +507,37 @@ app.post("/api/repos/connect", async (req, res) => {
     .object({
       path: z.string().trim().min(1).max(1000),
       projectId: z.string().optional(),
+      mapping: z.enum(["ai", "static"]).default("static"),
+      config: configSchema.optional(),
     })
     .parse(req.body);
-  const discovered = await discoverRepo(
+  const existing = b.projectId ? projectById(b.projectId) : undefined;
+  const priorGraph = existing?.graph,
+    priorRepo = existing?.repo;
+  const discovered = await mapSource(
     /^https:\/\//i.test(b.path) ? await checkoutGithub(b.path) : b.path,
+    b.mapping,
+    b.config,
   );
   let p: Project;
   if (b.projectId) {
     p = projectById(b.projectId);
-    p.graph = discovered.graph;
+    if (p.graph !== priorGraph || p.repo !== priorRepo)
+      return res
+        .status(409)
+        .json({
+          error:
+            "Project changed while connecting. The newer source was retained; refresh before trying again.",
+        });
+    if (priorRepo?.path !== discovered.repo.path) {
+      disconnectReceiver(p.id);
+      disconnectLangfuse(p.id);
+    }
+    p.graph = {
+      ...discovered.graph,
+      id: priorGraph!.id,
+      revision: priorGraph!.revision + 1,
+    };
     p.repo = discovered.repo;
     p.name = discovered.repo.name;
     p.updatedAt = now();
@@ -390,11 +660,13 @@ app.use(
     if (res.headersSent) return res.end();
     res
       .status(
-        error instanceof ZodError
-          ? 422
-          : /not found/i.test(error.message)
-            ? 404
-            : 400,
+        (error as any).type === "entity.too.large"
+          ? 413
+          : error instanceof ZodError
+            ? 422
+            : /not found/i.test(error.message)
+              ? 404
+              : 400,
       )
       .json({
         error: redact(

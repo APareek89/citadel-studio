@@ -56,14 +56,62 @@ import type {
   GraphNode,
   Model,
   ModelConfig,
+  ObservedSpan,
   Preflight,
   Project,
   Provider,
   RedPlan,
   Run,
   RunEvent,
+  SourceRef,
 } from "../shared/types";
 
+type GitHubStatus = {
+  connected: boolean;
+  authSource: "token" | "gh" | null;
+  login?: string;
+};
+type ConnectionStatus = {
+  native: { enabled: boolean; endpoint: string; lastReceivedAt?: string };
+  langfuse: {
+    connected: boolean;
+    url?: string;
+    projectName?: string;
+    lastSyncAt?: string;
+  };
+};
+type MappingStatus = {
+  method: "ai" | "static";
+  model?: string;
+  discoveredFiles: number;
+  candidates: number;
+  mappedCandidates: number;
+  unresolvedCandidates: number;
+  sourceFilesRead: number;
+  truncated: boolean;
+  notes: string[];
+  error?: string;
+};
+type ExternalEvidence = {
+  kind: "workbench" | "langfuse";
+  traceId: string;
+  partial: boolean;
+  spans: ObservedSpan[];
+};
+type SourcePreview = {
+  key: string;
+  source: SourceRef;
+  content?: string;
+  truncated?: boolean;
+  startLine?: number;
+  error?: string;
+};
+type FolderReview = {
+  name: string;
+  files: { path: string; content: string }[];
+  skipped: Record<string, number>;
+  totalBytes: number;
+};
 type Mode = "build" | "connect" | "redteam" | "models" | "evals";
 type Bootstrap = {
   projects: Project[];
@@ -350,16 +398,68 @@ function graphLayout(graph: Graph): Record<string, { x: number; y: number }> {
     }
     if (!progressed) break;
   }
-  for (const id of remaining) ranks.set(id, 0);
+  // Lay out a spanning path through cycles; retain every original edge for rendering.
+  while (remaining.size) {
+    const candidates = visible.filter((node) => remaining.has(node.id));
+    const seed =
+      candidates.find((node) =>
+        flow.some((edge) => edge.target === node.id && ranks.has(edge.source)),
+      ) ||
+      candidates.find((node) => node.role === "orchestrator") ||
+      candidates[0];
+    const incomingRanks = flow
+      .filter((edge) => edge.target === seed.id && ranks.has(edge.source))
+      .map((edge) => ranks.get(edge.source)!);
+    ranks.set(
+      seed.id,
+      incomingRanks.length ? Math.max(...incomingRanks) + 1 : 0,
+    );
+    remaining.delete(seed.id);
+    const queue = [seed.id];
+    for (let index = 0; index < queue.length; index++) {
+      const current = queue[index];
+      for (const edge of flow) {
+        if (edge.source !== current || !remaining.has(edge.target)) continue;
+        ranks.set(edge.target, ranks.get(current)! + 1);
+        remaining.delete(edge.target);
+        queue.push(edge.target);
+      }
+    }
+  }
+  const connected = new Set(flow.flatMap((edge) => [edge.source, edge.target]));
   const lanes = new Map<number, number>();
-  return Object.fromEntries(
-    visible.map((n) => {
-      const rank = ranks.get(n.id) || 0,
+  const placements = visible
+    .filter((node) => connected.has(node.id))
+    .map((node) => {
+      const rank = ranks.get(node.id) || 0,
         lane = lanes.get(rank) || 0;
       lanes.set(rank, lane + 1);
-      return [n.id, { x: rank * 360, y: 75 + lane * 230 }];
-    }),
-  );
+      return { id: node.id, rank, lane };
+    });
+  // Wrap long workflows into six-column bands; graph semantics and saved positions stay intact.
+  const bandRows = Math.max(1, ...lanes.values());
+  const result: Record<string, { x: number; y: number }> = {};
+  for (const { id, rank, lane } of placements)
+    result[id] = {
+      x: (rank % 6) * 360,
+      y: 75 + (Math.floor(rank / 6) * bandRows + lane) * 230,
+    };
+  const isolatedTop = placements.length
+    ? Math.max(...Object.values(result).map((point) => point.y)) + 230
+    : 75;
+  visible
+    .filter((node) => !connected.has(node.id))
+    .forEach((node, index) => {
+      result[node.id] = {
+        x: (index % 4) * 360,
+        y: isolatedTop + Math.floor(index / 4) * 230,
+      };
+    });
+  return result;
+}
+function initialSelection(graph: Graph) {
+  const node = graph.nodes.find((candidate) => !candidate.hidden);
+  return node ? { type: "node" as const, id: node.id } : null;
 }
 function AgentNode({
   data,
@@ -443,6 +543,10 @@ export default function App() {
     [hiddenModal, setHiddenModal] = useState(false),
     [searchModal, setSearchModal] = useState(false),
     [search, setSearch] = useState("");
+  const [sourcePreview, setSourcePreview] = useState<SourcePreview | null>(
+    null,
+  );
+  const sourceCodeRef = useRef<HTMLPreElement>(null);
   const [models, setModels] = useState<Record<string, Model[]>>({}),
     [config, setConfig] = useState<ModelConfig>({
       credentialId: "",
@@ -469,6 +573,30 @@ export default function App() {
     | { name: string; url: string; isPrivate: boolean; description: string }[]
     | null
   >(null);
+  const [sourceMethod, setSourceMethod] = useState<
+      "github" | "local" | "upload"
+    >("github"),
+    [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null),
+    [githubToken, setGithubToken] = useState(""),
+    [folderReview, setFolderReview] = useState<FolderReview | null>(null),
+    [folderConfirmed, setFolderConfirmed] = useState(false);
+  const [mappingMode, setMappingMode] = useState<"ai" | "static">("ai");
+  const [traceMethod, setTraceMethod] = useState<"native" | "langfuse">(
+      "native",
+    ),
+    [connections, setConnections] = useState<{
+      projectId: string;
+      status: ConnectionStatus;
+    } | null>(null),
+    [nativeIssued, setNativeIssued] = useState<{
+      projectId: string;
+      token: string;
+      endpoint: string;
+      snippet: string;
+    } | null>(null),
+    [langfuseUrl, setLangfuseUrl] = useState("https://cloud.langfuse.com"),
+    [langfusePublicKey, setLangfusePublicKey] = useState(""),
+    [langfuseSecretKey, setLangfuseSecretKey] = useState("");
   const [redScope, setRedScope] = useState("local-test"),
     [brandRules, setBrandRules] = useState(
       "Be clear, accurate and respectful. State uncertainty. Never claim a tool action succeeded without evidence.",
@@ -516,6 +644,17 @@ export default function App() {
       typeof data.system.docker === "object"
         ? data.system.docker.available
         : data.system.docker;
+  const mappingStatus = (
+    project?.repo as
+      (NonNullable<Project["repo"]> & { mapping?: MappingStatus }) | undefined
+  )?.mapping;
+  const liveStatus =
+    connections?.projectId === projectId ? connections.status : null;
+  const externalRun = (
+    run as (Run & { external?: ExternalEvidence }) | undefined
+  )?.external;
+  const canExecuteProject =
+    !isImported || project?.repo?.adapter === "learning-studio";
   const observedGraph = view === "observed" && run ? run.graph : graph;
   const running = !!run && !terminal(run),
     selectedNode = observedGraph?.nodes.find(
@@ -556,11 +695,7 @@ export default function App() {
     setAlignment(project.alignment || null);
     setGraph(structuredClone(project.graph));
     setDirty(false);
-    setSelection(
-      project.graph.nodes[0]
-        ? { type: "node", id: project.graph.nodes[0].id }
-        : null,
-    );
+    setSelection(initialSelection(project.graph));
     setRunId("");
     setView("design");
     setPreflight(null);
@@ -612,6 +747,45 @@ export default function App() {
     return () => clearInterval(timer);
   }, [hasActive]);
   useEffect(() => {
+    if (mode !== "connect" || step !== "Observe" || hasActive) return;
+    const timer = setInterval(
+      () => refresh().catch(() => setDisconnected(true)),
+      3000,
+    );
+    return () => clearInterval(timer);
+  }, [mode, step, hasActive]);
+  useEffect(() => {
+    setSourcePreview(null);
+    setNativeIssued(null);
+    setLangfusePublicKey("");
+    setLangfuseSecretKey("");
+    setConnections(null);
+  }, [projectId]);
+  useEffect(() => {
+    if (!projectId || mode !== "connect") return;
+    let current = true;
+    api<ConnectionStatus>(`/projects/${projectId}/connections`)
+      .then((status) => {
+        if (current) {
+          setConnections({ projectId, status });
+          if (status.langfuse.url) setLangfuseUrl(status.langfuse.url);
+        }
+      })
+      .catch((e) => {
+        if (current) setError(e.message);
+      });
+    return () => {
+      current = false;
+    };
+  }, [projectId, mode, step]);
+  useEffect(() => {
+    if (mode !== "connect" || step !== "Observe" || runId) return;
+    const incoming = projectRuns.find(
+      (r) => (r as Run & { external?: ExternalEvidence }).external,
+    );
+    if (incoming) inspectRun(incoming);
+  }, [mode, step, projectId, runId, projectRuns.map((r) => r.id).join("|")]);
+  useEffect(() => {
     if (!config.credentialId || models[config.credentialId]) return;
     api<Model[]>(`/credentials/${config.credentialId}/models`)
       .then((m) => {
@@ -639,6 +813,18 @@ export default function App() {
       )
       .catch(() => {});
   }, [config.credentialId, completedForCredential, disconnected]);
+  useEffect(() => {
+    if (mode === "connect" && step === "Connect")
+      refreshGitHub().catch((e) => setError(e.message));
+  }, [mode, step]);
+  useEffect(() => {
+    if (sourcePreview?.content === undefined) return;
+    sourceCodeRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-line="${sourcePreview.source.line || sourcePreview.startLine || 1}"]`,
+      )
+      ?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [sourcePreview?.key, sourcePreview?.content]);
   const comparisonTraceState = comparison?.slots
     .map(
       (slot) =>
@@ -700,6 +886,14 @@ export default function App() {
     setBrief(p.brief);
     setAlignment(p.alignment || null);
     setDirty(false);
+    setSelection((current) =>
+      current &&
+      (current.type === "node"
+        ? p.graph.nodes.some((node) => node.id === current.id)
+        : p.graph.edges.some((edge) => edge.id === current.id))
+        ? current
+        : initialSelection(p.graph),
+    );
   }
   function requireConfig(c = config) {
     if (!c.credentialId || !c.model) {
@@ -760,8 +954,7 @@ export default function App() {
     setView("observed");
     setInspectorTab("Output");
     setEventId("");
-    if (r.graph.nodes[0])
-      setSelection({ type: "node", id: r.graph.nodes[0].id });
+    setSelection(initialSelection(r.graph));
   }
   function promoteCase(inputText: string, expected = "", sourceRunId?: string) {
     let cases: EvalCase[] = [];
@@ -780,6 +973,135 @@ export default function App() {
     setNotice(
       "Case added as a draft. Review its expected outcome and assertions before saving.",
     );
+  }
+  function mappingOptions() {
+    return mappingMode === "ai"
+      ? { mapping: "ai", config: requireConfig() }
+      : { mapping: "static" };
+  }
+  async function remapSource() {
+    const p = await api<Project>(
+      `/projects/${projectId}/remap`,
+      "POST",
+      mappingOptions(),
+    );
+    syncProject(p);
+    setView("design");
+    setSelection(initialSelection(p.graph));
+    setNotice(
+      `Source map refreshed to revision ${p.graph.revision}. Earlier traces retain their recorded graphs.`,
+    );
+  }
+  async function inspectSource(source: SourceRef) {
+    const key = `${projectId}:${source.path}:${source.line || 1}:${Date.now()}`;
+    setSourcePreview({ key, source });
+    const query = new URLSearchParams({ path: source.path });
+    if (source.line) query.set("line", String(source.line));
+    try {
+      const result = await api<{
+        path: string;
+        content: string;
+        truncated: boolean;
+        startLine: number;
+      }>(`/projects/${projectId}/source?${query}`);
+      setSourcePreview((current) =>
+        current?.key === key ? { ...current, ...result } : current,
+      );
+    } catch (error) {
+      setSourcePreview((current) =>
+        current?.key === key
+          ? { ...current, error: (error as Error).message }
+          : current,
+      );
+    }
+  }
+  async function refreshConnections() {
+    const status = await api<ConnectionStatus>(
+      `/projects/${projectId}/connections`,
+    );
+    setConnections({ projectId, status });
+    return status;
+  }
+  async function refreshGitHub(loadRepositories = false) {
+    const status = await api<GitHubStatus>("/github/status");
+    setGithubStatus(status);
+    if (loadRepositories && status.connected) {
+      setGithubRepos(
+        await api<NonNullable<typeof githubRepos>>("/repos/github"),
+      );
+    } else if (!status.connected) {
+      setGithubRepos(null);
+    }
+    return status;
+  }
+  async function reviewFolder(files: File[]) {
+    setFolderReview(null);
+    setFolderConfirmed(false);
+    const accepted: FolderReview["files"] = [];
+    const skipped: Record<string, number> = {};
+    let totalBytes = 0;
+    const skip = (reason: string) => {
+      skipped[reason] = (skipped[reason] || 0) + 1;
+    };
+    const ignored =
+      /(^|\/)(node_modules|vendor|dist|build|coverage|__pycache__|venv|\.venv|\.git|\.next|\.local|\.cache|output|target)(\/|$)/i;
+    const sensitive =
+      /(^|\/)(\.env[^/]*|\.npmrc|\.pypirc|\.netrc|id_rsa[^/]*|id_ed25519[^/]*)(\/|$)|(?:secret|credential|access.?keys)|\.(pem|p12|pfx|key|keystore)$/i;
+    const textFile =
+      /\.(tsx?|jsx?|mjs|cjs|py|go|rs|rb|php|java|kt|swift|c|cpp|h|cs|sh|bash|zsh|ps1|json|jsonc|ya?ml|toml|ini|cfg|conf|md|mdx|txt|html?|css|scss|sass|less|sql|graphql|gql|xml|csv|ipynb|dockerfile)$/i;
+    const textName =
+      /(^|\/)(Dockerfile|Makefile|Procfile|Gemfile|Rakefile|requirements[^/]*|LICENSE|README|\.gitignore|\.dockerignore|\.editorconfig)$/i;
+    const ordered = [...files].sort((a, b) =>
+      a.webkitRelativePath.localeCompare(b.webkitRelativePath),
+    );
+    for (const file of ordered) {
+      const relative = file.webkitRelativePath || file.name;
+      const path = relative.includes("/")
+        ? relative.split("/").slice(1).join("/")
+        : relative;
+      if (ignored.test(path)) {
+        skip("Dependencies and generated files");
+        continue;
+      }
+      if (sensitive.test(path)) {
+        skip("Sensitive file names");
+        continue;
+      }
+      if (!textFile.test(path) && !textName.test(path)) {
+        skip("Binary or unsupported file types");
+        continue;
+      }
+      if (file.size > 900_000) {
+        skip("Files larger than 900 KB");
+        continue;
+      }
+      if (accepted.length >= 500 || totalBytes + file.size > 8 * 1024 * 1024) {
+        skip("Import size limit");
+        continue;
+      }
+      const content = await file.text();
+      if (content.includes("\0") || content.includes("\ufffd")) {
+        skip("Binary or invalid text");
+        continue;
+      }
+      if (
+        /(?:AIza[0-9A-Za-z_-]{30,}|github_pat_[0-9A-Za-z_]{20,}|gh[pousr]_[0-9A-Za-z]{20,}|sk-(?:proj-)?[0-9A-Za-z_-]{24,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/.test(
+          content,
+        )
+      ) {
+        skip("Potential credentials in content");
+        continue;
+      }
+      accepted.push({ path, content });
+      totalBytes += file.size;
+    }
+    setFolderReview({
+      name:
+        files[0]?.webkitRelativePath.split("/")[0] || "Imported application",
+      files: accepted,
+      skipped,
+      totalBytes,
+    });
   }
   async function selectCredential(id: string) {
     setConfig((c) => ({ ...c, credentialId: id, model: "" }));
@@ -1117,38 +1439,96 @@ export default function App() {
                 }
               }}
             >
-              <option value="">New run</option>
+              <option value="">
+                {canExecuteProject ? "New run" : "Choose an observed trace"}
+              </option>
               {projectRuns.map((r) => (
                 <option key={r.id} value={r.id}>
                   {fmtDate(r.createdAt)} · r{r.graph.revision} · {r.status}
+                  {(r as Run & { external?: ExternalEvidence }).external
+                    ? " · external"
+                    : ""}
                 </option>
               ))}
             </select>
           </div>
         </div>
+        {!canExecuteProject && (
+          <div className="callout small external-callout">
+            <div>
+              <strong>Observe through instrumentation</strong>
+              <p>
+                This source map has no execution adapter. Run your application
+                in its own environment and send native traces, or sync Langfuse
+                observations.
+              </p>
+            </div>
+            <button
+              className="button small"
+              onClick={() => {
+                setTraceMethod("native");
+                navigate("connect", "Connect");
+              }}
+            >
+              Connect live traces
+            </button>
+          </div>
+        )}
+        {externalRun && (
+          <div className="external-evidence">
+            <span className="connection-kind">
+              Observed externally ·{" "}
+              {externalRun.kind === "langfuse" ? "Langfuse" : "Native"}
+            </span>
+            <span>
+              {externalRun.partial ? "Partial trace" : "Recorded trace"} ·{" "}
+              {externalRun.spans.length} spans
+            </span>
+            {externalRun.spans.some((span) => span.model) && (
+              <span>
+                Observed model:{" "}
+                {[
+                  ...new Set(
+                    externalRun.spans.flatMap((span) =>
+                      span.model ? [span.model] : [],
+                    ),
+                  ),
+                ].join(", ")}
+              </span>
+            )}
+            <span className="muted">
+              Execution is controlled by the connected application.
+            </span>
+          </div>
+        )}
         <div className="playground-grid">
           <div>
             <textarea
               aria-label="Sample input"
               className="sample-input"
+              disabled={!canExecuteProject}
               placeholder={
-                isImported
-                  ? "Describe a lesson or learning goal for the connected application…"
-                  : "Give this application an input to work with…"
+                !canExecuteProject
+                  ? "Select an incoming trace above to inspect its recorded input."
+                  : isImported
+                    ? "Describe a lesson or learning goal for the connected application…"
+                    : "Give this application an input to work with…"
               }
               value={input}
               onChange={(e) => setInput(e.target.value)}
             />
             <div className="row spread">
               <span className="muted small">
-                {config.model
-                  ? `Using ${config.model}`
-                  : "Choose a model above"}
+                {!canExecuteProject || externalRun
+                  ? "External execution · no provider key needed here"
+                  : config.model
+                    ? `Using ${config.model}`
+                    : "Choose a model above"}
               </span>
               <div className="row">
                 <button
                   className="button small"
-                  disabled={!!busy || running}
+                  disabled={!!busy || running || !canExecuteProject}
                   onClick={() =>
                     act("Checking preflight", async () => {
                       await checkReady();
@@ -1160,6 +1540,12 @@ export default function App() {
                 {running ? (
                   <button
                     className="button small danger"
+                    disabled={!!externalRun}
+                    title={
+                      externalRun
+                        ? "This run is controlled by the connected application"
+                        : undefined
+                    }
                     onClick={() =>
                       act("Stopping run", async () => {
                         await api(`/runs/${runId}/cancel`, "POST");
@@ -1167,12 +1553,13 @@ export default function App() {
                       })
                     }
                   >
-                    <Square size={13} /> Stop
+                    <Square size={13} />{" "}
+                    {externalRun ? "Controlled by app" : "Stop"}
                   </button>
                 ) : (
                   <button
                     className="button primary small"
-                    disabled={!!busy}
+                    disabled={!!busy || !canExecuteProject}
                     onClick={() =>
                       act("Starting run", () => startRun(isImported))
                     }
@@ -1233,6 +1620,62 @@ export default function App() {
               <p key={k}>{w}</p>
             ))}
           </div>
+        )}
+      </section>
+    );
+  }
+  function SourceReferences(node: GraphNode) {
+    const refs = [
+      ...new Map(
+        [...(node.source ? [node.source] : []), ...(node.sourceRefs || [])].map(
+          (source) => [
+            `${source.path}:${source.line || ""}:${source.symbol || ""}`,
+            source,
+          ],
+        ),
+      ).values(),
+    ];
+    if (!refs.length) return null;
+    return (
+      <section
+        className="source-references"
+        aria-label="Node source references"
+      >
+        <div className="row spread">
+          <span className="eyebrow">SOURCE REFERENCES</span>
+          <span className="count">{refs.length}</span>
+        </div>
+        <div className="source-reference-list">
+          {refs.map((source, index) => {
+            const label = `${source.path}${source.line ? `:${source.line}` : ""}`;
+            const content = (
+              <>
+                <FileCode2 size={14} />
+                <span>
+                  <code>{label}</code>
+                  {source.symbol && <small>{source.symbol}</small>}
+                </span>
+                {isImported && <ChevronRight size={13} />}
+              </>
+            );
+            return isImported ? (
+              <button
+                key={index}
+                className="source-reference-item"
+                aria-label={`Inspect source ${label}${source.symbol ? `, ${source.symbol}` : ""}`}
+                onClick={() => void inspectSource(source)}
+              >
+                {content}
+              </button>
+            ) : (
+              <div key={index} className="source-reference-item">
+                {content}
+              </div>
+            );
+          })}
+        </div>
+        {!isImported && (
+          <p className="muted small">Connect source to inspect these files.</p>
         )}
       </section>
     );
@@ -1318,15 +1761,7 @@ export default function App() {
                       <span className="muted small">Hidden resource</span>
                     )}
                   </div>
-                  {node.source && (
-                    <div className="source-ref">
-                      <FileCode2 size={14} />
-                      <code>
-                        {node.source.path}
-                        {node.source.line ? `:${node.source.line}` : ""}
-                      </code>
-                    </div>
-                  )}
+                  {SourceReferences(node)}
                   <Field label="Name">
                     <input
                       value={node.label}
@@ -2058,6 +2493,789 @@ export default function App() {
       </div>
     );
   }
+  function MappingFields() {
+    return (
+      <div className="mapping-options">
+        <Field label="Mapping approach">
+          <select
+            value={mappingMode}
+            onChange={(e) => setMappingMode(e.target.value as "ai" | "static")}
+          >
+            <option value="ai">AI workflow map (recommended)</option>
+            <option value="static">Source inventory only</option>
+          </select>
+        </Field>
+        <p className="muted small">
+          {mappingMode === "ai"
+            ? `Uses ${config.model || "your selected model"} to identify workflows from bounded source excerpts. This is a billed model call. A small model such as Gemini Flash Lite is recommended.`
+            : "Discovers files and source references without model inference. Agent relationships may remain unresolved."}
+        </p>
+        {mappingMode === "ai" && (!config.credentialId || !config.model) && (
+          <button
+            className="button small"
+            onClick={() => setCredentialModal(true)}
+          >
+            <KeyRound size={13} /> Choose a model credential
+          </button>
+        )}
+      </div>
+    );
+  }
+  function MappingCoverage() {
+    if (!mappingStatus) return null;
+    return (
+      <div className="mapping-coverage">
+        <div className="row spread">
+          <strong>
+            {mappingStatus.method === "ai"
+              ? "AI workflow map"
+              : "Source inventory"}
+          </strong>
+          {mappingStatus.model && (
+            <span className="muted small">{mappingStatus.model}</span>
+          )}
+        </div>
+        {mappingStatus.error && (
+          <div className="mapping-error" role="alert">
+            <strong>AI mapping failed; source inventory retained.</strong>
+            <p>{mappingStatus.error}</p>
+          </div>
+        )}
+        <div className="mapping-metrics">
+          <div>
+            <strong>{mappingStatus.discoveredFiles}</strong>
+            <span>discovered files</span>
+          </div>
+          <div>
+            <strong>
+              {mappingStatus.mappedCandidates}/{mappingStatus.candidates}
+            </strong>
+            <span>candidates mapped</span>
+          </div>
+          <div>
+            <strong>{mappingStatus.unresolvedCandidates}</strong>
+            <span>unresolved</span>
+          </div>
+        </div>
+        <p className="muted small">
+          {mappingStatus.sourceFilesRead} source files read
+          {mappingStatus.truncated
+            ? " · bounded excerpts; source was truncated"
+            : ""}
+          .
+        </p>
+        {mappingStatus.notes.length > 0 && (
+          <details>
+            <summary>Mapping coverage notes</summary>
+            <ul>
+              {mappingStatus.notes.map((note, index) => (
+                <li key={index}>{note}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    );
+  }
+  function SourceConnection() {
+    const githubReady = !!githubStatus?.connected;
+    const selectedRepo = githubRepos?.find((r) => r.url === repoPath);
+    return (
+      <section className="card source-connection">
+        <div className="card-heading">
+          <GitBranch size={20} />
+          <h3>Connect source</h3>
+          <span className="connection-kind">Static discovery</span>
+        </div>
+        <p className="muted small">
+          Read source to map agents, tools and supporting files. Source access
+          does not establish a live connection.
+        </p>
+        <div
+          className="connection-methods"
+          role="group"
+          aria-label="Source connection method"
+        >
+          {(
+            [
+              ["github", "GitHub"],
+              ["local", "Local path"],
+              ["upload", "Upload folder"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              className={sourceMethod === id ? "active" : ""}
+              aria-pressed={sourceMethod === id}
+              key={id}
+              onClick={() => {
+                setSourceMethod(id);
+                if (id === "local" && repoPath.startsWith("https://"))
+                  setRepoPath(repoDefault);
+                if (id === "github" && !repoPath.startsWith("https://"))
+                  setRepoPath("");
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {sourceMethod === "github" ? (
+          <>
+            <div className="connection-status">
+              <span className={`dot ${githubReady ? "green" : ""}`} />
+              <div>
+                <strong>
+                  {githubReady
+                    ? `Connected${githubStatus?.login ? ` as ${githubStatus.login}` : ""}`
+                    : "Connect your GitHub account"}
+                </strong>
+                <p>
+                  {githubReady
+                    ? `Using ${githubStatus?.authSource === "token" ? "a validated personal access token" : "the GitHub CLI on this computer"}.`
+                    : "Use a GitHub CLI login or a personal access token with read access to your repository."}
+                </p>
+              </div>
+            </div>
+            <div className="row connection-actions">
+              <button
+                className="button small"
+                disabled={!!busy}
+                onClick={() =>
+                  act("Checking GitHub", async () => {
+                    const status = await refreshGitHub(true);
+                    if (!status.connected)
+                      throw new Error(
+                        "No GitHub session found. Sign in with the GitHub CLI on this computer or validate a token below.",
+                      );
+                  })
+                }
+              >
+                {githubReady ? "Refresh repositories" : "Check GitHub CLI"}
+              </button>
+              {githubStatus?.authSource === "token" && (
+                <button
+                  className="text-button"
+                  disabled={!!busy}
+                  onClick={() =>
+                    act("Disconnecting GitHub token", async () => {
+                      await api("/github/token", "DELETE");
+                      setGithubRepos(null);
+                      await refreshGitHub();
+                      setNotice(
+                        "GitHub token removed. Any existing local CLI login remains available.",
+                      );
+                    })
+                  }
+                >
+                  Remove token
+                </button>
+              )}
+            </div>
+            <details className="token-details">
+              <summary>
+                {githubReady
+                  ? "Use a different GitHub token"
+                  : "Connect with a personal access token"}
+              </summary>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const token = githubToken.trim();
+                  if (!token) return;
+                  setGithubToken("");
+                  act("Validating GitHub token", async () => {
+                    await api("/github/token", "POST", { token });
+                    await refreshGitHub(true);
+                    setNotice(
+                      "GitHub token validated. Choose a repository to map.",
+                    );
+                  });
+                }}
+              >
+                <Field
+                  label="Personal access token"
+                  hint="Use repository read access only. Sent to this local server; never stored in your browser."
+                >
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    placeholder="GitHub personal access token"
+                  />
+                </Field>
+                <button
+                  className="button small"
+                  type="submit"
+                  disabled={!!busy || !githubToken.trim()}
+                >
+                  Validate & connect
+                </button>
+              </form>
+            </details>
+            {githubReady && (
+              <>
+                <Field label="GitHub repository">
+                  <select
+                    value={selectedRepo ? repoPath : ""}
+                    onChange={(e) => {
+                      if (e.target.value) setRepoPath(e.target.value);
+                    }}
+                  >
+                    <option value="">
+                      {githubRepos === null
+                        ? "Refresh repositories to choose one"
+                        : "Choose a repository"}
+                    </option>
+                    {githubRepos?.map((r) => (
+                      <option key={r.url} value={r.url}>
+                        {r.name} · {r.isPrivate ? "Private" : "Public"}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {selectedRepo?.description && (
+                  <p className="muted small">{selectedRepo.description}</p>
+                )}
+                {githubRepos?.length === 0 && (
+                  <p className="muted small">
+                    No repositories returned. Check that your token can read the
+                    intended repository, or paste its URL below.
+                  </p>
+                )}
+              </>
+            )}
+            <Field label="Repository URL">
+              <input
+                placeholder="https://github.com/owner/repository"
+                value={repoPath.startsWith("https://") ? repoPath : ""}
+                onChange={(e) => setRepoPath(e.target.value)}
+              />
+            </Field>
+          </>
+        ) : sourceMethod === "local" ? (
+          <>
+            <Field
+              label="Local repository path"
+              hint="An existing folder on the computer running this server."
+            >
+              <input
+                placeholder="/path/to/repository"
+                value={repoPath}
+                onChange={(e) => setRepoPath(e.target.value)}
+              />
+            </Field>
+            {repoDefault && repoPath !== repoDefault && (
+              <button
+                className="text-button"
+                onClick={() => setRepoPath(repoDefault)}
+              >
+                Use Learning Studio checkout
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <Field
+              label="Choose an application folder"
+              hint="Files are reviewed in your browser before you import. Up to 500 text files, 900 KB each and 8 MB total."
+            >
+              <input
+                type="file"
+                multiple
+                ref={(el) => {
+                  if (el) el.setAttribute("webkitdirectory", "");
+                }}
+                disabled={!!busy}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  e.target.value = "";
+                  if (files.length)
+                    act("Reviewing folder", () => reviewFolder(files));
+                }}
+              />
+            </Field>
+            {folderReview && (
+              <div className="folder-review">
+                <Field label="Application name">
+                  <input
+                    value={folderReview.name}
+                    onChange={(e) =>
+                      setFolderReview({ ...folderReview, name: e.target.value })
+                    }
+                  />
+                </Field>
+                <div className="row spread">
+                  <strong>{folderReview.files.length} files ready</strong>
+                  <span className="muted small">
+                    {(folderReview.totalBytes / 1024 / 1024).toFixed(2)} MB
+                  </span>
+                </div>
+                {Object.entries(folderReview.skipped).length > 0 && (
+                  <ul className="import-skips">
+                    {Object.entries(folderReview.skipped).map(
+                      ([reason, count]) => (
+                        <li key={reason}>
+                          <span>{reason}</span>
+                          <strong>{count} skipped</strong>
+                        </li>
+                      ),
+                    )}
+                  </ul>
+                )}
+                <details>
+                  <summary>Review included files</summary>
+                  <ul className="import-files">
+                    {folderReview.files.map((f) => (
+                      <li key={f.path}>
+                        <code>{f.path}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={folderConfirmed}
+                    onChange={(e) => setFolderConfirmed(e.target.checked)}
+                  />
+                  <span>
+                    I reviewed the files and confirmed they can be imported.
+                  </span>
+                </label>
+              </div>
+            )}
+            <p className="muted small">
+              Dependencies, generated files, common credential files and binary
+              files are excluded. Review the list: automatic filtering cannot
+              identify every secret.
+            </p>
+          </>
+        )}
+        {MappingFields()}
+        <button
+          className="button primary"
+          disabled={
+            !!busy ||
+            (sourceMethod === "upload"
+              ? !folderConfirmed ||
+                !folderReview?.files.length ||
+                !folderReview.name.trim()
+              : !repoPath.trim() ||
+                (sourceMethod === "github" &&
+                  (!githubReady ||
+                    !repoPath.startsWith("https://github.com/"))))
+          }
+          onClick={() =>
+            act("Mapping source", async () => {
+              const options = mappingOptions();
+              const p =
+                sourceMethod === "upload" && folderReview
+                  ? await api<Project>("/repos/upload", "POST", {
+                      name: folderReview.name.trim(),
+                      files: folderReview.files,
+                      ...options,
+                    })
+                  : await api<Project>("/repos/connect", "POST", {
+                      path: repoPath.trim(),
+                      ...options,
+                    });
+              syncProject(p);
+              setStep("Map");
+              setFolderReview(null);
+              setFolderConfirmed(false);
+              setNotice(
+                "Source map created. Connect live traces separately to observe execution.",
+              );
+            })
+          }
+        >
+          {sourceMethod === "upload"
+            ? "Import reviewed source"
+            : "Connect & map"}
+          <ArrowRight size={15} />
+        </button>
+        <div className="callout small">
+          {sourceMethod === "github"
+            ? "GitHub repositories use a managed read-only source clone. "
+            : sourceMethod === "upload"
+              ? "Selected files are sent only to this local server. "
+              : "Local source is read without changing your files. "}
+          Connecting source does not run application code.
+        </div>
+      </section>
+    );
+  }
+  function LiveConnection() {
+    const issued = nativeIssued?.projectId === projectId ? nativeIssued : null;
+    const externalCount = projectRuns.filter(
+      (r) => (r as Run & { external?: ExternalEvidence }).external,
+    ).length;
+    return (
+      <section className="card live-connection">
+        <div className="card-heading">
+          <Workflow size={20} />
+          <h3>Connect live traces</h3>
+          <span className="connection-kind">Execution evidence</span>
+        </div>
+        <p className="muted small">
+          For <strong>{project?.name || "the selected application"}</strong>.
+          Send native events from your running application or pull recorded
+          observations from Langfuse. These connections do not execute your app.
+          No model-provider API key is needed for trace ingestion.
+        </p>
+        <div
+          className="connection-methods"
+          role="group"
+          aria-label="Live trace connection method"
+        >
+          {(
+            [
+              ["native", "Native instrumentation"],
+              ["langfuse", "Langfuse"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              className={traceMethod === id ? "active" : ""}
+              aria-pressed={traceMethod === id}
+              onClick={() => setTraceMethod(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {traceMethod === "native" ? (
+          <>
+            <div className="connection-status">
+              <span
+                className={`dot ${liveStatus?.native.lastReceivedAt ? "green" : ""}`}
+              />
+              <div>
+                <strong>
+                  {liveStatus?.native.lastReceivedAt
+                    ? "Receiving native trace evidence"
+                    : liveStatus?.native.enabled
+                      ? "Endpoint enabled · awaiting events"
+                      : "Add instrumentation to your app"}
+                </strong>
+                <p>
+                  {liveStatus?.native.lastReceivedAt
+                    ? `Last event ${fmtDate(liveStatus.native.lastReceivedAt)}.`
+                    : "A source map shows what may run. Native events show what actually ran."}
+                </p>
+              </div>
+            </div>
+            <div className="callout small">
+              Keep the endpoint and token in your application’s server
+              environment. This receiver is local to this computer; it is not a
+              public internet endpoint. The application must be able to reach
+              it.
+            </div>
+            {liveStatus?.native.enabled && !issued && (
+              <Field label="Trace receiver endpoint">
+                <input readOnly value={liveStatus.native.endpoint} />
+              </Field>
+            )}
+            {issued && (
+              <div className="native-integration">
+                <div className="row spread">
+                  <strong>Save this integration token now</strong>
+                  <span className="connection-kind">Shown once</span>
+                </div>
+                <p className="muted small">
+                  It is cleared when you switch projects or reload. Creating a
+                  new token replaces the previous token.
+                </p>
+                <Field label="Endpoint">
+                  <input readOnly value={issued.endpoint} />
+                </Field>
+                <Field label="Integration token">
+                  <div className="input-action">
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      readOnly
+                      value={issued.token}
+                    />
+                    <button
+                      className="button small"
+                      onClick={() =>
+                        act("Copying token", async () => {
+                          await navigator.clipboard.writeText(issued.token);
+                          setNotice("Integration token copied.");
+                        })
+                      }
+                    >
+                      Copy token
+                    </button>
+                  </div>
+                </Field>
+                <Field label="Integration example">
+                  <textarea
+                    className="code-input"
+                    rows={9}
+                    readOnly
+                    value={issued.snippet}
+                    spellCheck={false}
+                  />
+                </Field>
+                <button
+                  className="button small"
+                  onClick={() =>
+                    act("Copying integration", async () => {
+                      await navigator.clipboard.writeText(issued.snippet);
+                      setNotice("Integration example copied.");
+                    })
+                  }
+                >
+                  Copy integration example
+                </button>
+              </div>
+            )}
+            <div className="row connection-actions">
+              <button
+                className="button primary small"
+                disabled={!!busy || !projectId}
+                onClick={() =>
+                  act("Creating trace integration", async () => {
+                    const result = await api<{
+                      token: string;
+                      endpoint: string;
+                      snippet: string;
+                    }>(`/projects/${projectId}/telemetry/token`, "POST", {});
+                    setNativeIssued({ ...result, projectId });
+                    await refreshConnections();
+                    setNotice(
+                      "Trace endpoint enabled. Add the integration to your app to receive events.",
+                    );
+                  })
+                }
+              >
+                {liveStatus?.native.enabled
+                  ? "Replace integration token"
+                  : "Create integration token"}
+              </button>
+              {liveStatus?.native.enabled && (
+                <button
+                  className="text-button"
+                  disabled={!!busy}
+                  onClick={() =>
+                    act("Disabling native traces", async () => {
+                      await api(
+                        `/projects/${projectId}/telemetry/token`,
+                        "DELETE",
+                      );
+                      setNativeIssued(null);
+                      await refreshConnections();
+                      setNotice(
+                        "Native trace receiver disabled for this application.",
+                      );
+                    })
+                  }
+                >
+                  Disable receiver
+                </button>
+              )}
+            </div>
+            <details className="instrumentation-guide">
+              <summary>Instrument an agent call</summary>
+              <p>
+                Download a helper into your app and set the server environment
+                variables shown above. Wrap the real agent or tool call so its
+                input, output, timing and failures are recorded.
+              </p>
+              <div className="row connection-actions">
+                <a
+                  className="button small"
+                  href="/api/telemetry/client.mjs"
+                  download="workbench-client.mjs"
+                >
+                  <ArrowDownToLine size={13} />
+                  JavaScript helper
+                </a>
+                <a
+                  className="button small"
+                  href="/api/telemetry/client.py"
+                  download="workbench_client.py"
+                >
+                  <ArrowDownToLine size={13} />
+                  Python helper
+                </a>
+              </div>
+              <pre className="integration-code">{`import { WorkbenchTrace } from './workbench-client.mjs';
+
+const trace = new WorkbenchTrace('My app');
+await trace.run(() => trace.span(
+  'Research',
+  () => research(),
+  { role: 'agent', input: 'sample' }
+));`}</pre>
+              <p>
+                Replace <code>research()</code> with your actual function. Only
+                wrapped activity is observed; uninstrumented calls remain
+                unknown.
+              </p>
+            </details>
+          </>
+        ) : (
+          <>
+            <div className="connection-status">
+              <span
+                className={`dot ${liveStatus?.langfuse.connected ? "green" : ""}`}
+              />
+              <div>
+                <strong>
+                  {liveStatus?.langfuse.connected
+                    ? `Connected${liveStatus.langfuse.projectName ? ` · ${liveStatus.langfuse.projectName}` : ""}`
+                    : "Connect a Langfuse project"}
+                </strong>
+                <p>
+                  {liveStatus?.langfuse.lastSyncAt
+                    ? `Last synced ${fmtDate(liveStatus.langfuse.lastSyncAt)}.`
+                    : "Uses a project public key and secret key, not a personal access token."}
+                </p>
+              </div>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const publicKey = langfusePublicKey.trim(),
+                  secretKey = langfuseSecretKey.trim();
+                if (!publicKey || !secretKey) return;
+                setLangfusePublicKey("");
+                setLangfuseSecretKey("");
+                act("Validating Langfuse connection", async () => {
+                  await api(`/projects/${projectId}/langfuse`, "POST", {
+                    url: langfuseUrl.trim(),
+                    publicKey,
+                    secretKey,
+                  });
+                  await refreshConnections();
+                  setNotice(
+                    "Langfuse connection validated. Sync recent traces when ready.",
+                  );
+                });
+              }}
+            >
+              <Field
+                label="Langfuse base URL"
+                hint="Official EU, US, JP or HIPAA cloud, or a localhost self-hosted v4 instance."
+              >
+                <input
+                  type="url"
+                  value={langfuseUrl}
+                  onChange={(e) => setLangfuseUrl(e.target.value)}
+                  placeholder="https://cloud.langfuse.com"
+                  required
+                />
+              </Field>
+              <div className="connection-key-grid">
+                <Field label="Project public key">
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={langfusePublicKey}
+                    onChange={(e) => setLangfusePublicKey(e.target.value)}
+                    placeholder="pk-lf-…"
+                  />
+                </Field>
+                <Field label="Project secret key">
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={langfuseSecretKey}
+                    onChange={(e) => setLangfuseSecretKey(e.target.value)}
+                    placeholder="sk-lf-…"
+                  />
+                </Field>
+              </div>
+              <button
+                className="button small"
+                type="submit"
+                disabled={
+                  !!busy ||
+                  !projectId ||
+                  !langfuseUrl.trim() ||
+                  !langfusePublicKey.trim() ||
+                  !langfuseSecretKey.trim()
+                }
+              >
+                {liveStatus?.langfuse.connected
+                  ? "Validate replacement keys"
+                  : "Validate & connect"}
+              </button>
+            </form>
+            <p className="muted small">
+              Keys are sent to this local server and cleared from the form. Sync
+              is manual and imports available observations; it does not imply
+              full application coverage.
+            </p>
+            {liveStatus?.langfuse.connected && (
+              <div className="row connection-actions">
+                <button
+                  className="button primary small"
+                  disabled={!!busy}
+                  onClick={() =>
+                    act("Syncing recent traces", async () => {
+                      const result = await api<{
+                        runs: number;
+                        spans: number;
+                        limited: boolean;
+                        message: string;
+                      }>(`/projects/${projectId}/langfuse/sync`, "POST", {
+                        hours: 24,
+                      });
+                      await refresh();
+                      await refreshConnections();
+                      setNotice(
+                        result.message ||
+                          `${result.runs} runs and ${result.spans} spans synced${result.limited ? " (limited result)" : ""}.`,
+                      );
+                    })
+                  }
+                >
+                  Sync recent traces · 24 h
+                </button>
+                <button
+                  className="text-button"
+                  disabled={!!busy}
+                  onClick={() =>
+                    act("Disconnecting Langfuse", async () => {
+                      await api(`/projects/${projectId}/langfuse`, "DELETE");
+                      await refreshConnections();
+                      setNotice(
+                        "Langfuse disconnected. Previously imported traces remain available.",
+                      );
+                    })
+                  }
+                >
+                  Disconnect
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        <div className="connection-evidence-footer">
+          <span>
+            {externalCount
+              ? `${externalCount} external trace${externalCount === 1 ? "" : "s"} recorded`
+              : "No external traces recorded yet"}
+          </span>
+          <button
+            className="text-button"
+            onClick={() => {
+              setView("observed");
+              setStep("Observe");
+            }}
+          >
+            Open live observation <ArrowRight size={14} />
+          </button>
+        </div>
+      </section>
+    );
+  }
   function Connect() {
     if (step === "Map")
       return (
@@ -2067,11 +3285,43 @@ export default function App() {
             <strong>
               {project?.repo?.adapter || "No repository connected"}
             </strong>
-            <span>{project?.repo?.coverage.join(" · ")}</span>
+            <span>
+              {mappingStatus
+                ? `${mappingStatus.method === "ai" ? "AI map" : "Source inventory"} · ${mappingStatus.mappedCandidates}/${mappingStatus.candidates} candidates · ${mappingStatus.unresolvedCandidates} unresolved`
+                : project?.repo?.coverage.join(" · ")}
+            </span>
+            {project?.repo && (
+              <button
+                className="text-button"
+                disabled={!!busy}
+                title={
+                  mappingMode === "ai"
+                    ? "Refresh using one bounded model call with the selected model"
+                    : "Refresh source inventory without inference"
+                }
+                onClick={() => act("Refreshing source map", remapSource)}
+              >
+                Refresh source map{mappingMode === "ai" ? " · AI" : ""}
+              </button>
+            )}
             <button className="text-button" onClick={() => setStep("Connect")}>
               Coverage details
             </button>
           </div>
+          {mappingStatus?.error && (
+            <div className="mapping-error map-error" role="alert">
+              <div>
+                <strong>AI mapping failed; source inventory retained.</strong>
+                <p>{mappingStatus.error}</p>
+              </div>
+              <button
+                className="button small"
+                onClick={() => setStep("Connect")}
+              >
+                Review mapping setup
+              </button>
+            </div>
+          )}
           {GraphWorkspace({})}
         </>
       );
@@ -2155,139 +3405,21 @@ export default function App() {
           <span className="eyebrow">CONNECT & DEBUG</span>
           <h1>Bring the app you already have.</h1>
           <p>
-            Map its source, understand adapter coverage, then observe a real
-            execution. Your code remains yours.
+            Connect source to understand the structure. Connect live traces
+            separately to see actual execution. Your code remains yours.
           </p>
         </div>
         <div className="connect-grid">
+          {SourceConnection()}
           <section className="card">
-            <div className="card-heading">
-              <GitBranch size={20} />
-              <h3>Connect a repository</h3>
-            </div>
-            <div className="github-connect">
-              <div className="row spread">
-                <div>
-                  <strong>From GitHub</strong>
-                  <p className="muted small">
-                    Uses the GitHub account already connected on this computer.
-                  </p>
-                </div>
-                <button
-                  className="button small"
-                  disabled={!!busy}
-                  onClick={() =>
-                    act("Loading GitHub repositories", async () => {
-                      setGithubRepos(
-                        await api<
-                          {
-                            name: string;
-                            url: string;
-                            isPrivate: boolean;
-                            description: string;
-                          }[]
-                        >("/repos/github"),
-                      );
-                    })
-                  }
-                >
-                  {busy === "Loading GitHub repositories" ? (
-                    <Loader2 size={13} className="spin" />
-                  ) : (
-                    <GitBranch size={13} />
-                  )}
-                  {githubRepos === null
-                    ? "Load GitHub repositories"
-                    : "Refresh repositories"}
-                </button>
-              </div>
-              {githubRepos !== null &&
-                (githubRepos.length > 0 ? (
-                  <>
-                    <Field label="GitHub repository">
-                      <select
-                        value={
-                          githubRepos.some((r) => r.url === repoPath)
-                            ? repoPath
-                            : ""
-                        }
-                        onChange={(e) => {
-                          if (e.target.value) setRepoPath(e.target.value);
-                        }}
-                      >
-                        <option value="">Choose a repository</option>
-                        {githubRepos.map((r) => (
-                          <option key={r.url} value={r.url}>
-                            {r.name} · {r.isPrivate ? "Private" : "Public"}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    {githubRepos.find((r) => r.url === repoPath)
-                      ?.description && (
-                      <p className="muted small">
-                        {
-                          githubRepos.find((r) => r.url === repoPath)
-                            ?.description
-                        }
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="muted small">
-                    No repositories were returned for the connected GitHub
-                    account. You can still provide a repository URL or local
-                    checkout below.
-                  </p>
-                ))}
-            </div>
-            <Field
-              label="Local checkout or GitHub URL"
-              hint="Choose a repository above, paste its GitHub URL, or use a local checkout. No GitHub credentials are entered here."
-            >
-              <input
-                placeholder="/path/to/repository or https://github.com/owner/repo"
-                value={repoPath}
-                onChange={(e) => setRepoPath(e.target.value)}
-              />
-            </Field>
-            {repoDefault && repoPath !== repoDefault && (
-              <button
-                className="text-button"
-                onClick={() => setRepoPath(repoDefault)}
-              >
-                Use Learning Studio checkout
-              </button>
-            )}
-            <button
-              className="button primary"
-              disabled={!!busy || !repoPath.trim()}
-              onClick={() =>
-                act("Mapping repository", async () => {
-                  const p = await api<Project>("/repos/connect", "POST", {
-                    path: repoPath,
-                  });
-                  syncProject(p);
-                  setStep("Map");
-                  setNotice(
-                    "Source map created. Review coverage before observing a live run.",
-                  );
-                })
-              }
-            >
-              Connect & map <ArrowRight size={15} />
-            </button>
-            <div className="callout small">
-              GitHub sources are cloned into a managed, read-only checkout for
-              source discovery. Connecting does not execute repository code.
-              Real runs require a supported adapter; unknown paths stay opaque.
-            </div>
-          </section>
-          <section className="card">
-            <span className="eyebrow">ADAPTER COVERAGE</span>
+            <span className="eyebrow">SOURCE STATUS & COVERAGE</span>
             <h3>{project?.repo?.name || "What you can expect"}</h3>
             {project?.repo ? (
               <>
+                <div className="connection-status">
+                  <span className="dot green" />
+                  <strong>Source connected · static map</strong>
+                </div>
                 <div className="source-ref">
                   <FileCode2 size={14} />
                   <code>{project.repo.path}</code>
@@ -2296,6 +3428,7 @@ export default function App() {
                   <span className="muted">Pinned revision</span>
                   <code>{project.repo.revision.slice(0, 12)}</code>
                 </div>
+                {MappingCoverage()}
                 <h4>Covered paths</h4>
                 <ul className="check-list">
                   {project.repo.coverage.map((x, i) => (
@@ -2311,9 +3444,18 @@ export default function App() {
                     <li key={i}>{x}</li>
                   ))}
                 </ul>
-                <button className="button" onClick={() => setStep("Map")}>
-                  Open source map <ArrowRight size={14} />
-                </button>
+                <div className="row connection-actions">
+                  <button className="button" onClick={() => setStep("Map")}>
+                    Open source map <ArrowRight size={14} />
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={!!busy}
+                    onClick={() => act("Refreshing source map", remapSource)}
+                  >
+                    Refresh source map{mappingMode === "ai" ? " · AI" : ""}
+                  </button>
+                </div>
               </>
             ) : (
               <>
@@ -2351,6 +3493,7 @@ export default function App() {
             )}
           </section>
         </div>
+        {LiveConnection()}
       </div>
     );
   }
@@ -3858,6 +5001,68 @@ export default function App() {
             }
           }}
         />
+      )}
+      {sourcePreview && (
+        <Modal
+          title={sourcePreview.source.symbol || "Source code"}
+          kicker="READ-ONLY SOURCE"
+          onClose={() => setSourcePreview(null)}
+          wide
+        >
+          <div className="source-preview-meta">
+            <code>
+              {sourcePreview.source.path}
+              {sourcePreview.source.line ? `:${sourcePreview.source.line}` : ""}
+            </code>
+            <span className="connection-kind">Current source checkout</span>
+          </div>
+          <p className="muted small">
+            Bounded, redacted source excerpt. Recorded runs preserve their graph
+            references; this viewer reads the current connected source.
+          </p>
+          {sourcePreview.error ? (
+            <div className="mapping-error" role="alert">
+              <strong>Unable to read this source</strong>
+              <p>{sourcePreview.error}</p>
+            </div>
+          ) : sourcePreview.content === undefined ? (
+            <div className="source-loading" role="status">
+              <Loader2 size={18} className="spin" />
+              Loading source excerpt…
+            </div>
+          ) : (
+            <>
+              <pre
+                className="source-code-preview"
+                ref={sourceCodeRef}
+                tabIndex={0}
+                aria-label={`Source code from ${sourcePreview.source.path}`}
+              >
+                {sourcePreview.content.split("\n").map((line, index) => {
+                  const number = (sourcePreview.startLine || 1) + index;
+                  return (
+                    <span
+                      className={`source-code-line ${number === sourcePreview.source.line ? "highlighted" : ""}`}
+                      data-line={number}
+                      key={number}
+                    >
+                      <span className="source-line-number" aria-hidden="true">
+                        {number}
+                      </span>
+                      <code>{line || " "}</code>
+                    </span>
+                  );
+                })}
+              </pre>
+              {sourcePreview.truncated && (
+                <p className="muted small">
+                  This file is shown as a bounded excerpt around the selected
+                  reference.
+                </p>
+              )}
+            </>
+          )}
+        </Modal>
       )}
       {hiddenModal && (
         <Modal

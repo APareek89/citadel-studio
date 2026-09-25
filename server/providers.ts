@@ -1,4 +1,5 @@
 import { estimate } from "./pricing.js";
+import { redactIntegrationSecrets } from "./integration-secrets.js";
 export { estimate } from "./pricing.js";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -23,7 +24,7 @@ const rejected = new Map<string, string>();
 export const credentials = () =>
   [...vault.values()].map((c) => ({ ...c.meta }));
 export function redact(value: string): string {
-  let result = String(value);
+  let result = redactIntegrationSecrets(String(value));
   for (const { key } of vault.values())
     if (key) result = result.split(key).join("[REDACTED]");
   return result
@@ -36,12 +37,21 @@ export function redact(value: string): string {
 export function safeObject<T>(value: T): T {
   if (typeof value === "string") return redact(value) as T;
   if (Array.isArray(value)) return value.map((v) => safeObject(v)) as T;
-  if (value && typeof value === "object")
+  if (value && typeof value === "object") {
+    const seen = new Set<string>();
     return Object.fromEntries(
       Object.entries(value)
         .filter(([, v]) => v !== undefined)
-        .map(([k, v]) => [k, safeObject(v)]),
+        .map(([k, v]) => {
+          const base = redact(k);
+          let key = base,
+            suffix = 2;
+          while (seen.has(key)) key = `${base} (${suffix++})`;
+          seen.add(key);
+          return [key, safeObject(v)];
+        }),
     ) as T;
+  }
   return value;
 }
 export function addCredential(
