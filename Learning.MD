@@ -193,3 +193,11 @@ Why1: localhost-only request checks, localfilesystem/secretfile imports and plat
 Deepest why [deployment design]: hosting changes trust and capabilities, not only the URL.
 Action: retain loopback binding behind an authenticated TLSproxy; require its secret and exact origin/host; disable hostfilesystem/keyfile imports; expose execution availability before submission. Package the compiledserver with production dependencies and prove upload/export with all providerfetches blocked. Use a separate retained encryptedvolume and mount dependency for persistence.
 Prevention: verify unauthenticated denial, nativeBearer exception, missinghostcapabilities, clean productioninstall and persistence on the realhost. Local success does not establish cloudacceptance; receipts live in QA-REPORT.md.
+
+## 2026-09-25 — Root installation passed while the service user could not read dependencies
+Symptom: the first AWS release started and then failed with `ERR_MODULE_NOT_FOUND` for TypeScript, despite the clean local package smoke passing.
+Why 1: the remote bootstrap used umask 077; npm dependencies became unreadable by the unprivileged service user. The installer made the release root searchable but did not normalize dependency permissions.
+Why 2: the local smoke ran installation and execution as the same user, and an immediate systemd active check raced process startup.
+Deepest why [verification]: test the deployed identity and readiness contract, not merely the package contents or transient process state.
+Action: set umask 022 for npm installation, give read/search permission across the root-owned release while removing group/other writes, and require authenticated backend health before the installer reports success. Correct the empty previous-release receipt and omit irrelevant macOS xattrs from archives.
+Prevention: re-run the real installer under restrictive umask, then verify HTTPS and persistence as external clients. A passed package smoke remains useful but does not prove Linux service permissions.

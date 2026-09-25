@@ -23,15 +23,16 @@ tar --no-same-owner -xzf "$release_archive" -C "$release_dir"
 test -f "$release_dir/release.json"
 test -f "$release_dir/build-server/index.mjs"
 node "$release_dir/deployment/validate-environment.mjs"
-(cd "$release_dir" && npm ci --omit=dev --no-audit --no-fund)
+(umask 022; cd "$release_dir" && npm ci --omit=dev --no-audit --no-fund)
 chown -R root:root "$release_dir"
-chmod -R go-w "$release_dir"
+chmod -R a+rX,go-w "$release_dir"
 # mktemp creates mode700; the unprivileged service needs read/search access.
 chmod 0755 "$release_dir"
 # Validate prospective proxy configuration before changing the active release.
 systemd-run --quiet --wait --pipe --property=EnvironmentFile=/etc/agent-workbench/caddy.env \
   caddy validate --config "$release_dir/deployment/Caddyfile" --adapter caddyfile
-previous_release=$(readlink -f /opt/agent-workbench/current 2>/dev/null || true)
+previous_release=""
+if [[ -L /opt/agent-workbench/current ]]; then previous_release=$(readlink -f /opt/agent-workbench/current); fi
 ln -s "$release_dir" /opt/agent-workbench/current.next
 mv -Tf /opt/agent-workbench/current.next /opt/agent-workbench/current
 install -m 0644 "$release_dir/deployment/agent-workbench.service" /etc/systemd/system/agent-workbench.service
@@ -40,6 +41,7 @@ install -m 0644 "$release_dir/deployment/caddy-environment.conf" /etc/systemd/sy
 install -m 0644 "$release_dir/deployment/Caddyfile" /etc/caddy/Caddyfile
 systemctl daemon-reload
 systemctl enable agent-workbench caddy >/dev/null
+systemctl reset-failed agent-workbench caddy
 systemctl restart agent-workbench
 # Caddy reads its environment through systemd; no secret values are CLI args.
 systemctl restart caddy
@@ -47,6 +49,7 @@ if ! systemctl is-active --quiet agent-workbench || ! systemctl is-active --quie
   echo "A service failed to start. Previous release: ${previous_release:-none}. Inspect systemctl status; no secrets are printed by this installer." >&2
   exit 1
 fi
+node "$release_dir/deployment/verify-health.mjs"
 echo "Release installed at $release_dir"
 echo "Previous release: ${previous_release:-none}"
 echo "Verify authenticated HTTPS and rejection of unauthenticated requests before handoff. Port3001 must remain closed in the security group."

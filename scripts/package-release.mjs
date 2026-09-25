@@ -64,7 +64,9 @@ await writeFile(
     2,
   ) + "\n",
 );
-await execute("tar", ["-czf", archive, "-C", stage, "."]);
+await execute("tar", ["--no-xattrs", "-czf", archive, "-C", stage, "."], {
+  env: { ...process.env, COPYFILE_DISABLE: "1" },
+});
 console.log(`Release prepared: ${archive}`);
 console.log(
   "No local state, repository checkouts, model keys or AWS credentials are included.",
