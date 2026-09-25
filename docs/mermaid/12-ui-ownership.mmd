@@ -1,0 +1,28 @@
+%% 12 IMPLEMENTED in inspected source — project/model ownership; post-fix browser gate is separate
+flowchart TD
+SWITCH{"Foreground mutation active?<br/>[FUNCTION]<br/>in: requested project/new/navigation action and busy state<br/>out: wait or permit selection change"}:::dec
+WAIT["Retain mutation context<br/>[FUNCTION]<br/>in: active foreground operation<br/>out: project/new/navigation, presets and graph editors disabled<br/>central graph-update/connection guard rejects edits;<br/>temporary lock is separate from read-only ownership"]:::term
+RESET["Reset project-specific drafts<br/>[FUNCTION]<br/>in: resolved new project identity<br/>out: fresh eval, input, slot, baseline, brand and view selections"]:::fn
+HISTORY["Resolve selected history within project<br/>[FUNCTION]<br/>in: selected IDs and current project ID<br/>out: matching run, comparison, campaign or report; no foreign result"]:::fn
+VIEW["Render the selected workspace<br/>[LIBRARY · React]<br/>in: project drafts and owned immutable evidence<br/>out: current-project forms and inspectors<br/>comparison effects set graph view only on Graph Results"]:::data
+SELECT["Select a workbench credential<br/>[FUNCTION]<br/>in: user-selected credential ID<br/>out: cleared model selection and catalog request"]:::fn
+CATALOG["Cache returned model catalog<br/>[FUNCTION]<br/>in: response and original request credential ID<br/>out: catalog under that credential, independent of current choice"]:::fn
+DEFAULT["Resolve model defaults from current selection<br/>[FUNCTION]<br/>in: current credential and its cached model list<br/>out: compatible default only where selection is empty<br/>late response cannot choose another credential's model"]:::fn
+REFRESH["Reconcile server credential metadata<br/>[FUNCTION]<br/>in: refreshed valid credential IDs and browser references<br/>out: stale current/slot credentials and catalogs removed"]:::fn
+READY{"Current credential and selected model ready?<br/>[FUNCTION]<br/>in: valid server key ID and current cached model<br/>out: allowed action or configuration recovery<br/>model must be available and text-capable"}:::dec
+CONFIG["Ask for a valid model configuration<br/>[FUNCTION]<br/>in: invalid/missing key or incompatible model<br/>out: fixed configuration message and credential dialog"]:::ask
+REQUEST["Dispatch the selected action<br/>[FUNCTION]<br/>in: current project plus verified selection<br/>out: bounded API request; server independently validates"]:::term
+SWITCH -->|"busy"| WAIT
+SWITCH -->|"not busy; new project resolved"| RESET --> HISTORY --> VIEW
+SELECT --> CATALOG --> DEFAULT --> READY
+REFRESH --> DEFAULT
+VIEW -->|"user requests model-backed action"| READY
+READY -->|"validated key and compatible listed model"| REQUEST
+READY -->|"not ready"| CONFIG
+CONFIG -.->|"user configures credential"| SELECT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;

@@ -282,6 +282,12 @@ export interface GenerateResult {
   text: string;
   usage: Usage;
 }
+export interface GenerateOptions {
+  signal?: AbortSignal;
+  maxOutputTokens?: number;
+  json?: boolean;
+  responseSchema?: Record<string, unknown>;
+}
 const spendLimit = Number(process.env.WORKBENCH_SPEND_LIMIT_USD || 0);
 const ledgerPath = path.join(dataDir, "usage.json");
 const spendLedger = existsSync(ledgerPath)
@@ -297,12 +303,34 @@ export async function generate(
   config: ModelConfig,
   system: string,
   input: string,
-  opts: { signal?: AbortSignal; maxOutputTokens?: number; json?: boolean } = {},
+  opts: GenerateOptions = {},
 ): Promise<GenerateResult> {
   system = redact(system);
   input = redact(input);
   const c = getCredential(config.credentialId);
   const m = modelFor(config);
+  const responseSchema = opts.responseSchema
+    ? safeObject(opts.responseSchema)
+    : undefined;
+  if (responseSchema) {
+    if (
+      typeof responseSchema !== "object" ||
+      Array.isArray(responseSchema) ||
+      JSON.stringify(responseSchema).length > 20_000
+    )
+      throw new Error(
+        "Structured response schema exceeds the provider contract.",
+      );
+    opts = { ...opts, json: true };
+    if (c.meta.provider === "gemini" && !m.structured)
+      throw new Error(
+        "This model does not support native structured responses.",
+      );
+    // Other provider adapters retain a prompted schema + local validation. They
+    // do not claim the native schema guarantee used by the Gemini adapter.
+    if (c.meta.provider !== "gemini")
+      system += `\nReturn exactly one JSON object matching this schema: ${JSON.stringify(responseSchema)}`;
+  }
   if (system.length + input.length > 120000)
     throw new Error("Input exceeds the local 120,000-character safety limit.");
   const p = c.meta.provider;
@@ -318,6 +346,7 @@ export async function generate(
         maxOutputTokens: max,
         temperature: config.temperature ?? 0.2,
         ...(opts.json ? { responseMimeType: "application/json" } : {}),
+        ...(responseSchema ? { responseJsonSchema: responseSchema } : {}),
         ...(/^gemini-2\.5-flash/.test(config.model)
           ? { thinkingConfig: { thinkingBudget: 0 } }
           : {}),

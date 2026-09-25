@@ -23,12 +23,23 @@ import { redact, safeObject, modelFor } from "./providers.js";
 function json(text: string) {
   return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
 }
+const alignmentRequests = new WeakMap<Project, symbol>();
 export async function align(
   projectId: string,
   brief: string,
   config: ModelConfig,
 ): Promise<Alignment> {
   const p = projectById(projectId);
+  if (p.repo) throw new Error("A connected project is source-owned");
+  const request = Symbol("alignment");
+  alignmentRequests.set(p, request);
+  const prior = {
+    graph: p.graph,
+    repo: p.repo,
+    brief: p.brief,
+    name: p.name,
+    alignment: p.alignment,
+  };
   const generate = boundedGenerator(
     config,
     makeBudget(1),
@@ -121,6 +132,17 @@ export async function align(
     throw new Error(
       "Planner produced invalid graph: " +
         check.issues.map((i) => i.message).join("; "),
+    );
+  if (
+    alignmentRequests.get(p) !== request ||
+    p.graph !== prior.graph ||
+    p.repo !== prior.repo ||
+    p.brief !== prior.brief ||
+    p.name !== prior.name ||
+    p.alignment !== prior.alignment
+  )
+    throw new Error(
+      "The project changed while this plan was generating. The newer work was retained; prepare a new plan.",
     );
   p.alignment = alignment;
   p.brief = redact(brief);
@@ -255,6 +277,14 @@ export function saveSuite(
   existingId?: string,
 ): EvalSuite {
   projectById(args.projectId);
+  const old = existingId
+    ? state.suites.find((suite) => suite.id === existingId)
+    : undefined;
+  if (existingId && !old) throw new Error("Suite not found");
+  if (old && old.projectId !== args.projectId)
+    throw new Error(
+      "The suite does not belong to this project. Select a suite from the same project.",
+    );
   if (!args.cases.length || args.cases.length > 20)
     throw new Error("An eval suite needs 1–20 cases.");
   if (new Set(args.cases.map((c) => c.id)).size !== args.cases.length)
@@ -286,7 +316,6 @@ export function saveSuite(
       }
     }
   }
-  const old = state.suites.find((s) => s.id === existingId);
   const suite: EvalSuite = safeObject({
     ...args,
     id: id("suite"),
@@ -532,6 +561,22 @@ export async function planRedTeam(args: {
   const data = json(response.text);
   if (!Array.isArray(data.probes) || !data.probes.length)
     throw new Error("Planner returned no probes");
+  const probes = data.probes.slice(0, maxProbes);
+  if (
+    probes.some(
+      (probe: any) =>
+        !probe ||
+        !["security", "brand", "customer"].includes(probe.specialist) ||
+        typeof probe.input !== "string" ||
+        !probe.input.trim() ||
+        typeof probe.description !== "string" ||
+        !probe.description.trim() ||
+        (probe.forbidden !== undefined && typeof probe.forbidden !== "string"),
+    )
+  )
+    throw new Error(
+      "Planner returned an invalid probe. Prepare a new plan before running tests.",
+    );
   const plan: RedPlan = safeObject({
     id: id("red"),
     projectId: p.id,
@@ -545,11 +590,11 @@ export async function planRedTeam(args: {
     maxProbes,
     createdAt: now(),
     status: "proposed",
-    probes: data.probes.slice(0, maxProbes).map((probe: any) => ({
+    probes: probes.map((probe: any) => ({
       id: id("probe"),
       specialist: String(probe.specialist),
       input: String(probe.input).slice(0, 4000),
-      forbidden: String(probe.forbidden || "").slice(0, 200),
+      forbidden: String(probe.forbidden || "").trim().slice(0, 200),
       description: String(probe.description).slice(0, 2000),
     })),
     findings: [],

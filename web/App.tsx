@@ -125,6 +125,23 @@ type FolderReview = {
   skipped: Record<string, number>;
   totalBytes: number;
 };
+const DEFAULT_BRAND_RULES =
+  "Be clear, accurate and respectful. State uncertainty. Never claim a tool action succeeded without evidence.";
+const DEFAULT_RUBRIC =
+  "Assess whether the response satisfies the expected behavior. Use only the supplied evidence.";
+const DEFAULT_CASES = JSON.stringify(
+  [
+    {
+      id: "case-1",
+      input: "Explain what this assistant can help with.",
+      expected: "A clear, relevant response.",
+      assertions: [{ type: "not-contains", value: "API_KEY" }],
+    },
+  ],
+  null,
+  2,
+);
+
 type Mode = "build" | "connect" | "redteam" | "models" | "evals";
 type Bootstrap = {
   projects: Project[];
@@ -559,9 +576,7 @@ export default function App() {
     "behavioral",
   );
   const [redScope, setRedScope] = useState("local-test"),
-    [brandRules, setBrandRules] = useState(
-      "Be clear, accurate and respectful. State uncertainty. Never claim a tool action succeeded without evidence.",
-    ),
+    [brandRules, setBrandRules] = useState(DEFAULT_BRAND_RULES),
     [maxProbes, setMaxProbes] = useState(4),
     [redId, setRedId] = useState(""),
     [confirmed, setConfirmed] = useState(false);
@@ -573,30 +588,25 @@ export default function App() {
     [comparisonId, setComparisonId] = useState("");
   const [suiteId, setSuiteId] = useState(""),
     [suiteName, setSuiteName] = useState("Core behavior"),
-    [casesText, setCasesText] = useState(
-      pretty([
-        {
-          id: "case-1",
-          input: "Explain what this assistant can help with.",
-          expected: "A clear, relevant response.",
-          assertions: [{ type: "not-contains", value: "API_KEY" }],
-        },
-      ]),
-    ),
+    [casesText, setCasesText] = useState(DEFAULT_CASES),
     [judgeEnabled, setJudgeEnabled] = useState(false),
-    [rubric, setRubric] = useState(
-      "Assess whether the response satisfies the expected behavior. Use only the supplied evidence.",
-    ),
+    [rubric, setRubric] = useState(DEFAULT_RUBRIC),
     [baselineId, setBaselineId] = useState(""),
     [reportId, setReportId] = useState("");
   const project = data.projects.find((p) => p.id === projectId),
     activeMode = MODES.find((m) => m.id === mode)!;
-  const run = data.runs.find((r) => r.id === runId),
+  const run = data.runs.find(
+      (r) => r.id === runId && r.projectId === projectId,
+    ),
     red = data.redPlans.find(
       (r) => r.id === redId && r.projectId === projectId,
     ),
-    comparison = data.comparisons.find((c) => c.id === comparisonId),
-    report = data.reports.find((r) => r.id === reportId);
+    comparison = data.comparisons.find(
+      (c) => c.id === comparisonId && c.projectId === projectId,
+    ),
+    report = data.reports.find(
+      (r) => r.id === reportId && r.suite.projectId === projectId,
+    );
   const projectRuns = data.runs.filter((r) => r.projectId === projectId),
     projectSuites = data.suites.filter((s) => s.projectId === projectId),
     projectReports = data.reports.filter(
@@ -646,10 +656,64 @@ export default function App() {
       (e) => selection?.type === "edge" && e.id === selection.id,
     );
   const [disconnected, setDisconnected] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  useEffect(() => {
+    const entry = document.querySelector<HTMLScriptElement>(
+      'script[type="module"][src]',
+    )?.src;
+    const loadedEntry = entry ? new URL(entry).pathname : null;
+    if (!loadedEntry?.startsWith("/assets/")) return;
+    let active = true;
+    const check = () => {
+      if (document.visibilityState === "hidden") return;
+      api<{ uiEntry: string | null }>("/health")
+        .then((health) => {
+          if (active && health.uiEntry)
+            setUpdateAvailable(health.uiEntry !== loadedEntry);
+        })
+        .catch(() => {});
+    };
+    check();
+    const timer = setInterval(check, 30000);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, []);
   async function refresh() {
     const b = await api<Bootstrap>("/bootstrap");
     setDisconnected(false);
     setData(b);
+    setConfig((current) =>
+      b.credentials.some((c) => c.id === current.credentialId && c.valid)
+        ? current
+        : {
+            ...current,
+            credentialId: b.credentials.find((c) => c.valid)?.id || "",
+            model: "",
+          },
+    );
+    setModels((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([id]) =>
+          b.credentials.some((c) => c.id === id && c.valid),
+        ),
+      ),
+    );
+    setSlots((current) =>
+      current.map((slot) =>
+        b.credentials.some((c) => c.id === slot.config.credentialId && c.valid)
+          ? slot
+          : {
+              ...slot,
+              config: { ...slot.config, credentialId: "", model: "" },
+            },
+      ),
+    );
     setProjectId((p) =>
       b.projects.some((project) => project.id === p)
         ? p
@@ -682,6 +746,23 @@ export default function App() {
     setView("design");
     setPreflight(null);
     setSuiteId("");
+    setSuiteName("Core behavior");
+    setCasesText(DEFAULT_CASES);
+    setJudgeEnabled(false);
+    setRubric(DEFAULT_RUBRIC);
+    setBaselineId("");
+    setInput("");
+    setEventId("");
+    setSlots([]);
+    setStrategy("workflow");
+    setCompareNode("");
+    setBrandRules(DEFAULT_BRAND_RULES);
+    setRedScope("local-test");
+    setMaxProbes(4);
+    setError("");
+    setNotice("");
+    setFolderReview(null);
+    setFolderConfirmed(false);
     setReportId("");
     setRedId("");
     setConfirmed(false);
@@ -710,12 +791,12 @@ export default function App() {
     const f = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setSearchModal((s) => !s);
+        if (!busy) setSearchModal((s) => !s);
       }
     };
     document.addEventListener("keydown", f);
     return () => document.removeEventListener("keydown", f);
-  }, []);
+  }, [busy]);
   useEffect(() => {
     if (!config.credentialId) {
       const c = data.credentials.find((c) => c.valid);
@@ -778,11 +859,33 @@ export default function App() {
     api<Model[]>(`/credentials/${config.credentialId}/models`)
       .then((m) => {
         setModels((v) => ({ ...v, [config.credentialId]: m }));
-        if (!config.model)
-          setConfig((c) => ({ ...c, model: preferredModel(m)?.id || "" }));
+        setConfig((c) =>
+          c.credentialId === config.credentialId && !c.model
+            ? { ...c, model: preferredModel(m)?.id || "" }
+            : c,
+        );
       })
       .catch(() => {});
   }, [config.credentialId]);
+  useEffect(() => {
+    setConfig((c) =>
+      c.credentialId && !c.model && models[c.credentialId]
+        ? { ...c, model: preferredModel(models[c.credentialId])?.id || "" }
+        : c,
+    );
+    setSlots((current) => {
+      let changed = false;
+      const next = current.map((slot) => {
+        const model =
+          !slot.config.model &&
+          preferredModel(models[slot.config.credentialId] || []);
+        if (!model) return slot;
+        changed = true;
+        return { ...slot, config: { ...slot.config, model: model.id } };
+      });
+      return changed ? next : current;
+    });
+  }, [models, config.credentialId]);
   const completedForCredential = data.runs
     .filter(
       (r) =>
@@ -839,7 +942,8 @@ export default function App() {
         setEventId("");
       }
     }
-    if (step === "Graph Results") setView("observed");
+    if (step === "Graph Results")
+      setView(completed.length ? "observed" : "design");
   }, [mode, step, comparisonId, comparisonTraceState, runId]);
   useEffect(() => {
     if (notice) {
@@ -860,6 +964,7 @@ export default function App() {
     }
   }
   function navigate(m: Mode, s?: string) {
+    if (busy) return;
     setMode(m);
     setStep(s || MODES.find((x) => x.id === m)!.steps[0]);
     setPreflight(null);
@@ -884,7 +989,14 @@ export default function App() {
     );
   }
   function requireConfig(c = config) {
-    if (!c.credentialId || !c.model) {
+    if (
+      !data.credentials.some(
+        (credential) => credential.id === c.credentialId && credential.valid,
+      ) ||
+      !models[c.credentialId]?.some(
+        (model) => model.id === c.model && model.available && model.text,
+      )
+    ) {
       setCredentialModal(true);
       throw new Error(
         "Choose a validated credential and compatible model before continuing.",
@@ -893,7 +1005,7 @@ export default function App() {
     return c;
   }
   function updateGraph(updater: (g: Graph) => Graph) {
-    if (!graph) return;
+    if (!graph || busy) return;
     setGraph(updater(graph));
     setDirty(true);
     setPreflight(null);
@@ -1098,7 +1210,10 @@ export default function App() {
       const list = await api<Model[]>(`/credentials/${id}/models`);
       setModels((m) => ({ ...m, [id]: list }));
       const first = preferredModel(list);
-      if (first) setConfig((c) => ({ ...c, model: first.id }));
+      if (first)
+        setConfig((c) =>
+          c.credentialId === id ? { ...c, model: first.id } : c,
+        );
     } catch (e) {
       setError((e as Error).message);
     }
@@ -1131,9 +1246,7 @@ export default function App() {
                 api<Model[]>(`/credentials/${id}/models`)
                   .then((list) => {
                     setModels((m) => ({ ...m, [id]: list }));
-                    const first = preferredModel(list);
-                    if (first)
-                      onChange({ ...value, credentialId: id, model: first.id });
+                    // Resolve defaults from the currently selected credential, never from this old closure.
                   })
                   .catch((e) => setError(e.message));
             }}
@@ -1423,7 +1536,7 @@ export default function App() {
     selection,
   ]);
   function connectEdge(c: Connection) {
-    if (isImported || view === "observed" || !c.source || !c.target) return;
+    if (busy || isImported || view === "observed" || !c.source || !c.target) return;
     updateGraph((g) => ({
       ...g,
       edges: [
@@ -1519,6 +1632,7 @@ export default function App() {
           </button>
           <button
             className="button subtle small hidden-resources-button"
+            disabled={!!busy}
             onClick={() => setHiddenModal(true)}
           >
             <Layers3 size={14} /> Hidden nodes{" "}
@@ -1530,6 +1644,7 @@ export default function App() {
             <button
               className="icon-button"
               aria-label="Add graph node"
+              disabled={!!busy}
               onClick={() => {
                 const id = uid();
                 updateGraph((g) => ({
@@ -1712,8 +1827,8 @@ export default function App() {
               }));
           }}
           onConnect={connectEdge}
-          nodesDraggable={!isImported && view === "design"}
-          nodesConnectable={!isImported && view === "design"}
+          nodesDraggable={!busy && !isImported && view === "design"}
+          nodesConnectable={!busy && !isImported && view === "design"}
           defaultViewport={{ x: 35, y: 45, zoom: 1 }}
           minZoom={0.12}
           maxZoom={1.75}
@@ -2027,7 +2142,8 @@ export default function App() {
       events.find((e) => e.id === eventId) ||
       invocations.at(-1) ||
       events.at(-1);
-    const locked = isImported || view === "observed";
+    const readOnly = isImported || view === "observed";
+    const locked = readOnly || !!busy;
     const patchNode = (p: Partial<GraphNode>) =>
       updateGraph((g) => ({
         ...g,
@@ -2069,7 +2185,7 @@ export default function App() {
         <div className="inspector-body">
           {inspectorTab === "Configuration" ? (
             <>
-              {locked && (
+              {readOnly && (
                 <div className="callout small">
                   {isImported
                     ? "This application owns its source. Configuration is read-only here; inspect the source location and adapter coverage."
@@ -2418,6 +2534,7 @@ export default function App() {
             <textarea
               className="brief-input"
               aria-label="Application brief"
+              disabled={!!busy}
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
               placeholder="Build a support assistant that answers from approved knowledge, checks evidence, and escalates when it is unsure…"
@@ -2427,6 +2544,7 @@ export default function App() {
                 (label, i) => (
                   <button
                     key={label}
+                    disabled={!!busy}
                     onClick={() =>
                       setBrief(
                         [
@@ -2627,6 +2745,7 @@ export default function App() {
               ) : !isImported ? (
                 <button
                   className="button"
+                  disabled={!!busy}
                   onClick={() => setStep("Run & Test")}
                 >
                   Try in playground <ArrowRight size={15} />
@@ -2665,7 +2784,7 @@ export default function App() {
               type="number"
               min={x.min}
               max={x.max}
-              disabled={isImported}
+              disabled={isImported || !!busy}
               value={graph.limits[x.key]}
               onChange={(e) =>
                 updateGraph((g) => ({
@@ -2685,7 +2804,7 @@ export default function App() {
             min="0.001"
             max="3"
             step="0.01"
-            disabled={isImported}
+            disabled={isImported || !!busy}
             value={graph.limits.maxCostUsd ?? ""}
             placeholder="Call limits only"
             onChange={(e) =>
@@ -5246,7 +5365,11 @@ await trace.run(() => trace.span(
             >
               Open source map <ArrowRight size={14} />
             </button>
-            <button className="button" onClick={() => setNewModal(true)}>
+            <button
+              className="button"
+              disabled={!!busy}
+              onClick={() => setNewModal(true)}
+            >
               Create a new application
             </button>
           </div>
@@ -5298,6 +5421,7 @@ await trace.run(() => trace.span(
         <div className="project-picker">
           <select
             aria-label="Current project"
+            disabled={!!busy}
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
           >
@@ -5311,6 +5435,7 @@ await trace.run(() => trace.span(
           <button
             className="icon-button"
             aria-label="New project"
+            disabled={!!busy}
             onClick={() => setNewModal(true)}
           >
             <Plus size={16} />
@@ -5323,6 +5448,7 @@ await trace.run(() => trace.span(
               <button
                 aria-label={m.label}
                 title={m.label}
+                disabled={!!busy}
                 className={`nav-item ${mode === m.id ? "active" : ""}`}
                 onClick={() => navigate(m.id)}
               >
@@ -5335,6 +5461,7 @@ await trace.run(() => trace.span(
                   {m.steps.map((s, i) => (
                     <button
                       key={s}
+                      disabled={!!busy}
                       className={step === s ? "active" : ""}
                       onClick={() => setStep(s)}
                     >
@@ -5397,6 +5524,7 @@ await trace.run(() => trace.span(
               className="search-trigger"
               aria-label="Find anything"
               title="Find anything"
+              disabled={!!busy}
               onClick={() => setSearchModal(true)}
             >
               <Search size={14} />
@@ -5418,6 +5546,7 @@ await trace.run(() => trace.span(
         <div className="mobile-project-picker">
           <select
             aria-label="Switch project"
+            disabled={!!busy}
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
           >
@@ -5431,6 +5560,7 @@ await trace.run(() => trace.span(
           <button
             className="button small"
             aria-label="Create new project"
+            disabled={!!busy}
             onClick={() => setNewModal(true)}
           >
             <Plus size={14} /> New
@@ -5469,6 +5599,7 @@ await trace.run(() => trace.span(
           {activeMode.steps.map((s) => (
             <button
               key={s}
+              disabled={!!busy}
               className={step === s ? "active" : ""}
               onClick={() => setStep(s)}
             >
@@ -5483,6 +5614,23 @@ await trace.run(() => trace.span(
               <strong>Connection interrupted.</strong> Reconnecting to the local
               service. The last received trace remains visible.
             </span>
+          </div>
+        )}
+        {updateAvailable && (
+          <div className="connection-banner" role="status">
+            <span>
+              <strong>An app update is ready.</strong>{" "}
+              {dirty
+                ? "Save your graph changes, then reload to use the latest version."
+                : "Reload to use the latest version. Any unsaved form entries will be cleared."}
+            </span>
+            <button
+              className="button small"
+              disabled={dirty}
+              onClick={() => window.location.reload()}
+            >
+              Reload app
+            </button>
           </div>
         )}
         {error && (
@@ -5647,6 +5795,7 @@ await trace.run(() => trace.span(
               .map((n) => (
                 <button
                   key={n.id}
+                  disabled={!!busy}
                   onClick={() => {
                     setSelection({ type: "node", id: n.id });
                     setInspectorTab("Configuration");
@@ -5707,6 +5856,7 @@ await trace.run(() => trace.span(
             ).map((m) => (
               <button
                 key={m.id}
+                disabled={!!busy}
                 onClick={() => {
                   navigate(m.id);
                   setSearchModal(false);
@@ -5727,6 +5877,7 @@ await trace.run(() => trace.span(
               .map((n) => (
                 <button
                   key={n.id}
+                  disabled={!!busy}
                   onClick={() => {
                     setSelection({ type: "node", id: n.id });
                     setInspectorTab("Configuration");

@@ -19,6 +19,7 @@ import type {
   Usage,
 } from "../shared/types.js";
 import { committedSource, LEARNING_REVISION } from "./importer.js";
+import type { GenerateOptions } from "./providers.js";
 
 const require = createRequire(import.meta.url);
 const workspace = path.resolve(
@@ -46,7 +47,7 @@ const ALLOWED_SOURCE = new Set([
 type Generate = (
   system: string,
   input: string,
-  options?: { maxOutputTokens?: number },
+  options?: Omit<GenerateOptions, "signal">,
 ) => Promise<{ text: string; usage: Usage }>;
 type Event = Omit<RunEvent, "id" | "time">;
 
@@ -72,7 +73,7 @@ export async function ask(messages,options={},config={}){
   const id=++serial; const nodeId=nodeFor(config.runName);
   const system=messages.filter(m=>m.role==='system').map(m=>m.text).join('\n');
   const input=messages.filter(m=>m.role!=='system').map(m=>m.text).join('\n');
-  const response=await new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});emit({type:'model.request',id,nodeId,system,input,maxOutputTokens:Math.min(options.maxTokens||3000,3000)});});
+  const response=await new Promise((resolve,reject)=>{pending.set(id,{resolve,reject});emit({type:'model.request',id,nodeId,system,input,maxOutputTokens:Math.min(options.maxTokens||3000,3000),...(options.responseSchema?{json:true,responseSchema:options.responseSchema}:{})});});
   const u=usage.get(nodeId)||{inputTokens:0,outputTokens:0,estimatedCostUsd:0};
   u.inputTokens+=response.usage?.inputTokens||0;u.outputTokens+=response.usage?.outputTokens||0;u.estimatedCostUsd+=response.usage?.estimatedCostUsd||0;usage.set(nodeId,u);
   return response.text;
@@ -103,12 +104,13 @@ case 'ZodEnum':return {type:'string',enum:d.values};
 case 'ZodString':return {type:'string'};case 'ZodNumber':return {type:'number'};case 'ZodBoolean':return {type:'boolean'};
 case 'ZodOptional':case 'ZodDefault':return schemaJson(d.innerType);
 case 'ZodNullable':return {anyOf:[schemaJson(d.innerType),{type:'null'}]};
-case 'ZodLiteral':return {const:d.value};default:return {};
+case 'ZodLiteral':return {type:typeof d.value,enum:[d.value]};default:throw new Error('Unsupported structured source schema: '+d.typeName);
 }}
 function parse(text){const clean=text.trim().replace(/^\x60\x60\x60(?:json)?\s*/,'').replace(/\s*\x60\x60\x60$/,'');try{return JSON.parse(clean);}catch{const a=clean.indexOf('{'),b=clean.lastIndexOf('}');if(a<0||b<a)throw new Error('Model did not return JSON.');return JSON.parse(clean.slice(a,b+1));}}
 export function structuredWithFallback(client,_gpt,schema,opts={}){return {invoke:async(messages,config)=>{
- const instruction={role:'system',text:'Return exactly one JSON object matching this schema. No markdown or commentary. '+JSON.stringify(schemaJson(schema))};
- const text=await ask([...messages,instruction],client,config);const parsed=schema.parse(parse(text));
+ const responseSchema=schemaJson(schema);
+ const instruction={role:'system',text:'Return exactly one JSON object matching this schema. No markdown or commentary. '+JSON.stringify(responseSchema)};
+ const text=await ask([...messages,instruction],{...client,responseSchema},config);const parsed=schema.parse(parse(text));
  return opts.includeRaw?{parsed,raw:{content:text}}:parsed;
 }};}
 export const rawWithFallback=(client)=>({invoke:async(messages,config)=>({content:await ask(messages,client,config)})});
@@ -119,6 +121,83 @@ class Message {constructor(content,role){this.role=role;this.content=typeof cont
 export class SystemMessage extends Message{constructor(content){super(content,'system');}}
 export class HumanMessage extends Message{constructor(content){super(content,'user');}}
 `;
+
+/** Only the bounded schema vocabulary produced by the pinned shim may cross IPC. */
+export function validLearningResponseSchema(
+  value: unknown,
+  depth = 0,
+): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value) || depth > 12)
+    return false;
+  const schema = value as Record<string, unknown>;
+  const allowed = new Set([
+    "type",
+    "properties",
+    "required",
+    "items",
+    "enum",
+    "anyOf",
+  ]);
+  if (Object.keys(schema).some((key) => !allowed.has(key))) return false;
+  if (schema.anyOf !== undefined)
+    return (
+      Object.keys(schema).length === 1 &&
+      Array.isArray(schema.anyOf) &&
+      schema.anyOf.length > 0 &&
+      schema.anyOf.length <= 5 &&
+      schema.anyOf.every((child) =>
+        validLearningResponseSchema(child, depth + 1),
+      )
+    );
+  if (
+    !["object", "array", "string", "number", "boolean", "null"].includes(
+      String(schema.type),
+    )
+  )
+    return false;
+  if (schema.type === "object") {
+    if (
+      !schema.properties ||
+      typeof schema.properties !== "object" ||
+      Array.isArray(schema.properties)
+    )
+      return false;
+    const properties = schema.properties as Record<string, unknown>;
+    if (
+      Object.keys(properties).length > 80 ||
+      Object.entries(properties).some(
+        ([key, child]) =>
+          key.length > 200 || !validLearningResponseSchema(child, depth + 1),
+      )
+    )
+      return false;
+    if (
+      !Array.isArray(schema.required) ||
+      schema.required.length > 80 ||
+      schema.required.some(
+        (key) => typeof key !== "string" || !Object.hasOwn(properties, key),
+      )
+    )
+      return false;
+  } else if (schema.properties !== undefined || schema.required !== undefined)
+    return false;
+  if (schema.type === "array") {
+    if (!validLearningResponseSchema(schema.items, depth + 1)) return false;
+  } else if (schema.items !== undefined) return false;
+  if (
+    schema.enum !== undefined &&
+    (!Array.isArray(schema.enum) ||
+      !schema.enum.length ||
+      schema.enum.length > 80 ||
+      schema.enum.some(
+        (item) =>
+          !["string", "number", "boolean"].includes(typeof item) ||
+          String(item).length > 1000,
+      ))
+  )
+    return false;
+  return true;
+}
 
 const stubs: Record<string, string> = {
   "src/agent/llm.ts": modelShim,
@@ -331,7 +410,7 @@ export async function runLearningStudio({
     onEvent({
       type: "feedback",
       message:
-        "Original overview source executes in a macOS sandbox. Provider calls are injected per run. Retrieval/database/auth/billing/Langfuse are disabled; artifact persistence is in memory. Full lesson build is discovery-only.",
+        "Original overview source executes in a macOS sandbox. Provider calls are injected per run. Structured calls preserve the original schema: Gemini uses native JSON Schema; other providers use JSON instructions/mode with original local validation. Retrieval/database/auth/billing/Langfuse are disabled; artifact persistence is in memory. Full lesson build is discovery-only.",
     });
     return await new Promise<string>((resolve, reject) => {
       const child = spawn(
@@ -409,7 +488,14 @@ export async function runLearningStudio({
               ++calls > 6 ||
               typeof msg.system !== "string" ||
               typeof msg.input !== "string" ||
-              msg.system.length + msg.input.length > 250_000
+              msg.system.length + msg.input.length > 250_000 ||
+              !Number.isInteger(msg.maxOutputTokens) ||
+              msg.maxOutputTokens < 1 ||
+              msg.maxOutputTokens > 3000 ||
+              (msg.responseSchema !== undefined &&
+                (msg.json !== true ||
+                  JSON.stringify(msg.responseSchema).length > 20_000 ||
+                  !validLearningResponseSchema(msg.responseSchema)))
             ) {
               finish(
                 new Error(
@@ -423,6 +509,9 @@ export async function runLearningStudio({
                 Number(msg.maxOutputTokens) || 3000,
                 3000,
               ),
+              ...(msg.responseSchema
+                ? { json: true, responseSchema: msg.responseSchema }
+                : {}),
             }).then(
               (result) => {
                 if (result.text.length > 300_000) {

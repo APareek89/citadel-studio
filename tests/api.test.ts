@@ -357,6 +357,27 @@ test(
       );
       let project: any;
       await t.test(
+        "red-team run rejects absent or false approval before dispatch",
+        async () => {
+          for (const confirmed of [undefined, false]) {
+            const response = await api(
+              "/api/redteam/not-an-approved-plan/run",
+              "POST",
+              {
+                config: {
+                  credentialId: importedCredential.id,
+                  model: "gemini-2.5-flash",
+                },
+                ...(confirmed === undefined ? {} : { confirmed }),
+              },
+            );
+            assert.equal(response.status, 422);
+            assert.match(await response.text(), /confirmed/);
+          }
+          assert.ok(!logs.includes("External provider network"));
+        },
+      );
+      await t.test(
         "saved revisions and exported runnable ZIP remove keys and machine source references",
         async () => {
           const created = await api("/api/projects", "POST", {
@@ -540,6 +561,25 @@ test(
               ? "Production bundle fallback exercised."
               : "No production bundle: development deny path exercised instead.",
           );
+          if (production) {
+            const page = await api("/");
+            const html = await page.text();
+            const entry = html.match(
+              /<script\b[^>]*\bsrc="(\/assets\/[^\"]+\.js)"/,
+            )?.[1];
+            assert.ok(
+              entry,
+              "Published HTML identifies its exact JavaScript build",
+            );
+            assert.equal(page.headers.get("cache-control"), "no-store");
+            const health: any = await (await api("/api/health")).json();
+            assert.equal(
+              health.uiEntry,
+              entry,
+              "Open clients can detect an outdated bundle",
+            );
+            assert.equal((await api(entry!)).status, 200);
+          }
         },
       );
     } finally {

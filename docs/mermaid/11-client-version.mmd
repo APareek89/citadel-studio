@@ -1,0 +1,37 @@
+%% 11 IMPLEMENTED — detect a newer production client without discarding work
+flowchart TD
+MODE{"Explicit development mode enabled?<br/>[FUNCTION]<br/>in: WORKBENCH_DEV captured at startup<br/>out: Vite only for value 1, otherwise production"}:::dec
+DEV["Start requested development server<br/>[LIBRARY · Vite middleware]<br/>in: WORKBENCH_DEV=1 from npm run dev<br/>out: development client; no production-entry comparison"]:::term
+BUILD{"Production build exists before listen?<br/>[FUNCTION]<br/>in: dist/index.html at startup<br/>out: serve production or fail without a listener"}:::dec
+MISSING["Reject missing production build<br/>[FUNCTION]<br/>in: absent dist/index.html<br/>out: explicit npm run build instructions; no Vite fallback"]:::term
+HTML["Serve the published interface<br/>[FUNCTION]<br/>in: current dist HTML and hashed assets<br/>out: static response with Cache-Control no-store"]:::fn
+LOAD["Capture loaded module identity<br/>[FUNCTION]<br/>in: current page module-script source<br/>out: loaded entry path"]:::fn
+PROD{"Loaded path starts with /assets/?<br/>[FUNCTION]<br/>in: loaded entry path<br/>out: production check or no comparison"}:::dec
+SKIP["Keep current development client<br/>[FUNCTION]<br/>in: no production entry path<br/>out: no release-comparison timer"]:::term
+TRIGGER["Schedule visible-client checks<br/>[FUNCTION]<br/>in: initial load, focus, visibility event or 30000ms interval<br/>out: health request while document is visible"]:::fn
+HEALTH["Read current published entry<br/>[FUNCTION]<br/>in: local health request and current dist/index.html<br/>out: uiEntry path or null<br/>entry is reread on each request"]:::fn
+MATCH{"Published entry differs from loaded entry?<br/>[FUNCTION]<br/>in: non-null uiEntry and loaded path<br/>out: update banner or unchanged client"}:::dec
+KEEP["Continue existing client<br/>[FUNCTION]<br/>in: same entry, missing entry or unreachable check<br/>out: no automatic reload"]:::term
+BANNER["Present update notice<br/>[FUNCTION]<br/>in: different published entry and draft state<br/>out: reload option with explicit unsaved-work warning<br/>message is fixed UI text, not model-written"]:::ask
+DIRTY{"Unsaved graph changes?<br/>[FUNCTION]<br/>in: current dirty graph flag<br/>out: disabled reload or user-controlled action"}:::dec
+SAVE["Wait for graph save<br/>[FUNCTION]<br/>in: dirty graph and visible update notice<br/>out: existing work retained; reload disabled"]:::ask
+RELOAD["Reload on explicit user action<br/>[FUNCTION]<br/>in: user clicks Reload app; other unsaved forms were warned about<br/>out: request current published interface"]:::fn
+MODE -->|"value 1"| DEV
+MODE -->|"any other value"| BUILD
+BUILD -->|"exists"| HTML --> LOAD --> PROD
+BUILD -->|"missing"| MISSING
+PROD -->|"production entry"| TRIGGER --> HEALTH --> MATCH
+PROD -->|"development or no module path"| SKIP
+HEALTH -->|"request fails or no entry"| KEEP
+MATCH -->|"different entry"| BANNER --> DIRTY
+MATCH -->|"same entry"| KEEP
+DIRTY -->|"yes"| SAVE
+DIRTY -->|"no; user chooses reload"| RELOAD --> HTML
+SAVE -.->|"user saves graph"| DIRTY
+KEEP -.->|"next visible-client check"| TRIGGER
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;

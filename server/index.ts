@@ -60,6 +60,12 @@ import type {
 } from "../shared/types.js";
 const app = express();
 const port = Number(process.env.PORT || 3001);
+const development = process.env.WORKBENCH_DEV === "1";
+if (!development && !existsSync("dist/index.html")) {
+  throw new Error(
+    "The app build is missing. Run npm run build before npm start, or use npm run dev for development.",
+  );
+}
 app.disable("x-powered-by");
 app.use((req, res, next) => {
   const host = req.headers.host?.split(":")[0];
@@ -107,7 +113,17 @@ const find = <T extends { id: string }>(items: T[], target: string) => {
   if (!item) throw new Error("Item not found");
   return item;
 };
-app.get("/api/health", (_req, res) => res.json({ ok: true, version: "0.1.0" }));
+app.get("/api/health", (_req, res) => {
+  let uiEntry: string | null = null;
+  if (!development && existsSync("dist/index.html")) {
+    // Read the published entry on each check: a build can change while this process runs.
+    uiEntry =
+      readFileSync("dist/index.html", "utf8").match(
+        /<script\b[^>]*\bsrc="(\/assets\/[^\"]+\.js)"/,
+      )?.[1] || null;
+  }
+  res.json({ ok: true, version: "0.1.0", uiEntry });
+});
 app.get("/api/bootstrap", async (_req, res) =>
   res.json({
     ...state,
@@ -676,7 +692,12 @@ app.use(
       });
   },
 );
-if (existsSync("dist/index.html") && process.env.WORKBENCH_DEV !== "1") {
+if (!development) {
+  // The HTML selects the current hashed bundle; it must never select an old release from cache.
+  app.use((_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
   app.use(express.static("dist", { index: false, dotfiles: "deny" }));
   app.get("/{*path}", (_req, res) =>
     res.sendFile(path.resolve("dist/index.html")),

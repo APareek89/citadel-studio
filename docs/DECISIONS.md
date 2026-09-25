@@ -132,6 +132,40 @@
 
 **Consequence:** layout is free local computation and does not remap source or invoke a model. Fullscreen, Fit/Focus, labels, path/context scope and inspector visibility are temporary exploration state. Coordinates and routing hints do not change relationship kind, provenance, invocation history or scheduler behavior. The helper contract including external path has 16 passing free checks and the initial desktop pass succeeded; final revised-control browser/build acceptance remains explicit in [QA-REPORT.md](QA-REPORT.md).
 
+## 14 — Mutations preserve ownership and the user's latest intent
+
+**Chosen:** Build alignment only targets manifest-owned projects. Each alignment request captures current project state; only the newest request may publish, and only if graph, source, brief, name and prior alignment still match. Suite version updates require an existing suite belonging to the selected project. Behavioral probe proposals validate their allowed specialist and nonempty input/description before becoming approvable. Browser drafts reset on project changes and selected histories must belong to that project. Catalog results are cached under their requested credential; defaults resolve against the current credential and removed credentials are reconciled on refresh.
+
+**Reason:** syntactically valid output can still be wrong for the user's current project or action. The approved brief requires immutable evidence and reviewed plans, which includes the transitions that create them.
+
+**Rejected:** last-response-wins planning, silently treating a missing suite ID as a new first version, cross-project suite lineage, or coercing malformed model values into apparently valid probes.
+
+**Consequence:** stale work returns an actionable rejection and leaves the newer project intact. Foreground mutations temporarily disable project/new/navigation controls, brief presets and graph mutation controls, with a central graph-update guard. A save response therefore cannot replace edits accepted during its request. Inspector read-only ownership and temporary busy locking remain separate so the explanation stays accurate. Comparison effects change observed view only on Graph Results; completed background evidence remains project-scoped. An already-dispatched model call may still incur cost; the publication guard is not automatic cancellation. Retrying requires the user to prepare work against current state. Browser selection/reset and delayed-edit behavior have their own verification gates beyond API/service tests.
+
+## 15 — Detect stale clients without discarding drafts
+
+**Chosen:** the local production health endpoint returns the current hashed UI entry. Published HTML/assets use `Cache-Control: no-store`. A client containing the checker compares its loaded entry on focus/visibility and every 30 seconds while visible, then offers an explicit reload when a newer build differs. Dirty graph edits disable reload; other unsaved form entries receive a warning.
+
+**Reason:** a browser can keep executing an old bundle after the server's files change. A successful build cannot by itself establish what the user sees.
+
+**Rejected:** automatic refresh that loses work, a version label unrelated to the shipped bundle, or claiming all open legacy clients update themselves.
+
+**Consequence:** development mode has no production-entry comparison; an unreachable health check does not trigger reload. A tab loaded before this checker existed still needs an ordinary reload. Offline simulated journeys, interactive browser acceptance and live provider checks remain three distinct evidence layers.
+
+Production startup now requires a completed build. Only `WORKBENCH_DEV=1` enables Vite, and `npm run dev` sets it explicitly; a missing production build fails before listening instead of silently changing the serving mode. Health uses the captured startup mode. The reproduced development fallback invalidated the early checks as production UI acceptance; root repeated the offline journey after a stable build. This is a QA environment correction, not a confirmed explanation of the user's earlier screen.
+
+## 16 — Preserve the original structured-call contract across provider substitution
+
+**Chosen:** the pinned Learning Studio shim serializes supported original Zod types into a bounded response schema and sends it through validated IPC, the bounded generator and provider gateway. Gemini receives `responseJsonSchema` with JSON MIME mode; a Gemini model without advertised structured support rejects. Other provider adapters retain explicit schema instructions and available JSON mode, followed by the original local Zod validation. The source repository is unchanged. The adapter implementation follows Google's [GenerateContent API](https://ai.google.dev/api/generate-content).
+
+**Reason:** prompt-only JSON and provider-enforced response shape are different contracts. Substituting a provider must carry required nested fields, arrays and enum values through every boundary, while keeping local validation authoritative.
+
+**Rejected:** silently dropping the schema, treating all five providers as having the same native guarantee, weakening the original validator, accepting arbitrary schema references or adding an unapproved fallback provider.
+
+**Consequence:** the IPC accepts only the reviewed schema vocabulary, at most 20,000 serialized characters, depth 12, 80 properties/required entries/enum values and five anyOf alternatives. Unsupported Zod converter types fail closed; this is not a universal Zod-to-JSON-Schema implementation. Existing six-call, 1–3,000-output-token and sandbox limits remain. Thirty-one focused fixture checks include the actual original sandbox workflow with three mocked model calls. Post-fix live evidence remains a separate gate, and native structure does not prove factual or semantic quality.
+
 ## QA evidence boundary
 
 Live inference in this checkpoint used Gemini only; the other four provider adapters are fixture-tested. One connected red-team probe remains inconclusive after schema validation and an output-cap failure. These limits are preserved in [QA-REPORT.md](QA-REPORT.md). AWS setup is read-only and Docker is absent. No hosted auth/database or general repository runtime is implied by the local MVP.
+
+The new complete-flow simulations use temporary state and only provider fixtures/loopback integrations: Build has 11 passing checks, assessments 14 and Connect 8. The latest merged receipt is 181/181 with a passing build. Root repeated production offline UI checks for project/mode locks, suite/input reset, five comparisons/graph results, an approved red-team run, credentials after restart and dirty/saved update-banner reload. Final preset/save guards passed with 1,500ms injected delays and external fetch blocked: controls locked correctly, revision 3 saved, and editing resumed without losing dirty-state behavior or showing false immutable-history copy. The schema-transport fix has focused/free coverage, a successful same-input live overview and a one-case/five-assertion eval pass; exact scope is in QA-REPORT.md. Final gates belong to QA-REPORT.md. Native fixture tracing proves instrumentation and diagnosis evidence, not execution of the imported repository; fixture citation checks do not validate a model's diagnosis.

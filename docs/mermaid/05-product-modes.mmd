@@ -1,6 +1,10 @@
 %% 05 IMPLEMENTED — alignment, comparison, red-team and evaluation coordination
 flowchart TD
+OWNER{"Manifest-owned Build target?<br/>[FUNCTION]<br/>in: project and alignment request<br/>out: permitted planning or source-owned rejection"}:::dec
+CAPTURE["Capture planning ownership<br/>[FUNCTION]<br/>in: project graph, source, brief, name and prior alignment<br/>out: state references and newest request identity"]:::fn
 ALIGN["Align the requested app<br/>[AGENT · selected config.model]<br/>in: brief; one planning call, 5000 output tokens<br/>out: assumptions, questions and 1–5 proposed agents<br/>The model writes clarification questions"]:::agent
+PUBLISH{"Valid proposal, newest request and unchanged project?<br/>[FUNCTION]<br/>in: generated graph and captured/current state<br/>out: publish proposal or retain newer work"}:::dec
+REJECT["Reject without overwriting current state<br/>[FUNCTION]<br/>in: source-owned target, stale response or invalid identity/proposal<br/>out: actionable error; no target execution<br/>an already dispatched planning call may still incur cost"]:::term
 ASK["Present open questions<br/>[FUNCTION]<br/>in: model-written questions<br/>out: user updates the brief and requests a new plan"]:::ask
 APPROVE{"User accepts the proposed graph?<br/>[FUNCTION]<br/>in: explicit Accept action<br/>out: saved revision or further alignment"}:::dec
 COMPARE["Prepare candidate slots<br/>[FUNCTION]<br/>in: one input, 2–5 configs, node/workflow strategy<br/>out: supported candidates with shared budget at most 30 calls"]:::fn
@@ -8,11 +12,13 @@ REDMODE{"Choose red-team capability<br/>[FUNCTION]<br/>in: imported source or ex
 SOURCEPLAN["Prepare and approve source review<br/>[FUNCTION]<br/>in: protected imported source and brand criteria<br/>out: source-only suspected or inconclusive findings<br/>free plan; approved review at most 1 call, USD 0.25, 90s<br/>see diagram 10; no target execution"]:::fn
 UNSUPPORTED["Explain unavailable behavioral runner<br/>[FUNCTION]<br/>in: unsupported imported execution request<br/>out: source-review option before any planner call"]:::term
 RED["Produce bounded behavioral plan<br/>[AGENT · selected config.model]<br/>in: supported target, local-test or owned-staging and brand rules<br/>out: at most 6 synthetic security, brand or customer probes<br/>one planning call, 2200 output tokens"]:::agent
+VALIDPROBE{"Probe shape is valid?<br/>[FUNCTION]<br/>in: selected probes within maxProbes 1–6<br/>out: persist approvable plan or reject<br/>allowed specialist, nonempty input/description, string failure signal"}:::dec
 SCOPE{"User confirms the finite plan?<br/>[FUNCTION]<br/>in: confirmed=true and proposed campaign<br/>out: start once or retain proposed state"}:::dec
 PIN{"Approved target still matches?<br/>[FUNCTION]<br/>in: graph/repository fingerprint and current target<br/>out: accept or require new plan<br/>historical unpinned plans reject"}:::dec
 STALE["Require a new plan<br/>[FUNCTION]<br/>in: changed target or missing fingerprint<br/>out: no campaign execution"]:::term
 SOURCE["Review supported source heuristics<br/>[FUNCTION]<br/>in: inspected importer rules or manifest prompts<br/>out: suspected findings, not reproduced vulnerabilities"]:::fn
-CASES["Save evaluation suite version<br/>[FUNCTION]<br/>in: 1–20 cases, assertions and optional judge rubric<br/>out: immutable suite version and report with pinned criteria"]:::fn
+SUITEOWNER{"Existing version belongs to this project?<br/>[FUNCTION]<br/>in: selected project and optional prior suite ID<br/>out: accept new/same-project lineage or reject missing/foreign ID"}:::dec
+CASES["Save evaluation suite version<br/>[FUNCTION]<br/>in: verified lineage, 1–20 cases, assertions and optional judge rubric<br/>out: new immutable suite ID and incremented version"]:::fn
 SCHEDULE["Execute each accepted work item<br/>[FUNCTION]<br/>in: pinned graph/repo, config/input and campaign budget at most 30<br/>out: independent run and invocation events<br/>manifest or supported source adapter"]:::fn
 KIND{"Which result consumer?<br/>[FUNCTION]<br/>in: completed or partial run<br/>out: comparison, evaluation or red-team evidence"}:::dec
 ASSERT["Evaluate deterministic assertions<br/>[FUNCTION]<br/>in: case output, contains/JSON/length/regex rules<br/>out: reasons; regex execution limited to 30ms"]:::fn
@@ -23,21 +29,27 @@ LITERAL["Check literal failure signal<br/>[FUNCTION]<br/>in: prohibited substrin
 REVIEW["Review semantic behavior<br/>[AGENT · selected config.model]<br/>in: expected behavior, brand rules and candidate<br/>out: suspected or passed finding; maximum 512 output tokens<br/>human confirmation required for suspected violations"]:::agent
 HISTORY["Persist grouped evidence<br/>[DATA · workspace snapshots]<br/>in: comparisons, suites, reports, campaigns and run links<br/>out: retained partial and completed evidence"]:::data
 PROMOTE["Draft regression case<br/>[FUNCTION]<br/>in: selected trace/finding input and run ID<br/>out: editable expectation and assertions awaiting review"]:::fn
-ALIGN --> ASK
-ASK -.->|"answers appended to brief"| ALIGN
-ALIGN --> APPROVE
+OWNER -->|"manifest-owned"| CAPTURE --> ALIGN --> PUBLISH
+OWNER -->|"source-owned; before model call"| REJECT
+PUBLISH -->|"valid and current"| ASK
+PUBLISH -->|"valid and current"| APPROVE
+PUBLISH -->|"invalid, stale or superseded"| REJECT
+ASK -.->|"answers appended to brief; new request"| OWNER
 APPROVE -->|"accepted; run requested separately"| SCHEDULE
-APPROVE -->|"revise"| ALIGN
+APPROVE -->|"revise"| OWNER
 COMPARE --> SCHEDULE
 REDMODE -->|"source review; connected repository required"| SOURCEPLAN --> HISTORY
 REDMODE -->|"behavioral; manifest or supported adapter"| RED
 REDMODE -->|"behavioral; unsupported import"| UNSUPPORTED
-RED --> SCOPE
+RED --> VALIDPROBE
+VALIDPROBE -->|"valid"| SCOPE
+VALIDPROBE -->|"invalid"| REJECT
 SCOPE -->|"confirmed"| PIN
 PIN -->|"same approved target"| SOURCE --> SCHEDULE
 PIN -->|"changed or unpinned"| STALE
 SCOPE -->|"not confirmed"| RED
-CASES --> SCHEDULE --> KIND
+SUITEOWNER -->|"no prior ID or same-project version"| CASES --> SCHEDULE --> KIND
+SUITEOWNER -->|"missing or foreign prior ID"| REJECT
 KIND -->|"comparison: retain each candidate"| HISTORY
 KIND -->|"eval: successful execution"| ASSERT
 KIND -->|"red team: successful execution"| PROBE
@@ -46,7 +58,7 @@ ASSERT -->|"judge configured"| JUDGE --> EVAL
 ASSERT -->|"deterministic only"| EVAL --> HISTORY
 PROBE -->|"yes"| LITERAL --> HISTORY
 PROBE -->|"no"| REVIEW --> HISTORY
-HISTORY --> PROMOTE --> CASES
+HISTORY --> PROMOTE --> SUITEOWNER
 classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
 classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
 classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;

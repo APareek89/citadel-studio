@@ -16,6 +16,7 @@ import {
   safeObject,
   estimate,
   type GenerateResult,
+  type GenerateOptions,
 } from "./providers.js";
 import { validateGraph } from "./graph.js";
 import { dockerAvailable } from "./sandbox.js";
@@ -77,7 +78,7 @@ export function boundedGenerator(
   return async (
     system: string,
     input: string,
-    opts: { maxOutputTokens?: number; json?: boolean } = {},
+    opts: Omit<GenerateOptions, "signal"> = {},
   ): Promise<GenerateResult> => {
     const budgets = Array.isArray(budgetOrBudgets)
       ? budgetOrBudgets
@@ -251,7 +252,7 @@ export async function startRun(args: {
       const generateTracked = async (
         system: string,
         input: string,
-        options?: { maxOutputTokens?: number; json?: boolean },
+        options?: Omit<GenerateOptions, "signal">,
       ) => {
         const result = await call(system, input, options);
         run.usage.inputTokens += result.usage.inputTokens;

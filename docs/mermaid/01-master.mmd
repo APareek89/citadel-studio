@@ -1,7 +1,8 @@
 %% 01 MASTER — local application and ownership boundaries
 %% IMPLEMENTED means source inspected, not that every live journey has passed QA.
 flowchart TD
-UI["IMPLEMENTED · Five-mode workspace<br/>[LIBRARY · React + React Flow]<br/>in: user goal, graph edits, selected model<br/>out: same-origin API request"]:::data
+UI["IMPLEMENTED · Five-mode workspace<br/>[LIBRARY · React + React Flow]<br/>in: user goal, graph edits, selected model<br/>out: same-origin API request<br/>project/model ownership gates: see diagram 12"]:::data
+VERSION["IMPLEMENTED · Detect newer published interface<br/>[FUNCTION]<br/>in: loaded entry and local health uiEntry<br/>out: user-controlled reload notice; no automatic refresh<br/>see diagram 11"]:::fn
 API["IMPLEMENTED · Local API boundary<br/>[FUNCTION]<br/>in: browser request on loopback<br/>out: local operation after Host, Origin and JSON checks"]:::fn
 MODE{"IMPLEMENTED · Operation selection<br/>[FUNCTION]<br/>in: requested mode<br/>out: owning module"}:::dec
 ALIGN["IMPLEMENTED · Alignment and generation<br/>[AGENT · selected config.model]<br/>in: brief and answers<br/>out: questions, assumptions and graph<br/>see diagram 05"]:::agent
@@ -15,6 +16,7 @@ STORE["IMPLEMENTED · Local workspace and event journal<br/>[DATA · private JSO
 PRESENT["IMPLEMENTED · Present graph and recorded scope<br/>[FUNCTION]<br/>in: authoritative graph and node events<br/>out: local layout, source overview or external recorded path<br/>see diagram 09; no execution or graph rewrite"]:::fn
 RESULT["IMPLEMENTED · Inspect selected invocation<br/>[FUNCTION]<br/>in: recorded graph, input, output, status<br/>out: node detail and visible run state"]:::term
 UI --> API --> MODE
+UI -.->|"visible production client; 30s or focus"| VERSION
 MODE -->|"Build alignment"| ALIGN
 MODE -->|"Build execution"| RUN
 MODE -->|"Connect and Debug"| REPO

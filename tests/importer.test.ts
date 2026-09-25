@@ -24,6 +24,7 @@ import {
   learningSandboxAvailable,
   learningSandboxPolicy,
   runLearningStudio,
+  validLearningResponseSchema,
 } from "../server/learning-runner.js";
 import type { RunEvent } from "../shared/types.js";
 
@@ -151,8 +152,29 @@ test("learning adapter runs original overview, schemas and renderer with free mo
     config: { credentialId: "fixture", model: "fixture" },
     signal: new AbortController().signal,
     onEvent: (event) => events.push(event),
-    generate: async (_system, input) => {
+    generate: async (_system, input, options) => {
       modelCalls++;
+      assert.equal(
+        options?.json,
+        true,
+        "Original structured calls must request JSON mode",
+      );
+      assert.ok(validLearningResponseSchema(options?.responseSchema));
+      const schema = options!.responseSchema as any;
+      if (
+        input.includes(
+          "Return ONLY: title, framing, concepts, examples, outcomes",
+        )
+      ) {
+        assert.equal(schema.properties.concepts.items.type, "object");
+        assert.equal(
+          schema.properties.concepts.items.properties.label.type,
+          "string",
+        );
+        assert.deepEqual(schema.properties.concepts.items.required, ["label"]);
+        assert.equal(schema.properties.examples.items.type, "string");
+        assert.equal(schema.properties.outcomes.items.type, "string");
+      }
       const value = input.includes("Return ONLY the planned sections.")
         ? {
             sections: [
@@ -208,6 +230,31 @@ test("learning adapter runs original overview, schemas and renderer with free mo
     0,
   );
   assert.equal(total, 60);
+});
+
+test("structured IPC validates the pinned schema vocabulary and bounds", () => {
+  assert.equal(
+    validLearningResponseSchema({
+      type: "object",
+      properties: { answer: { type: "string" } },
+      required: ["answer"],
+    }),
+    true,
+  );
+  for (const value of [
+    null,
+    [],
+    {},
+    { type: "object", properties: {}, required: ["missing"] },
+    { type: "object", properties: { unknown: {} }, required: [] },
+    { type: "string", $ref: "https://external.invalid/schema" },
+    { type: "array", items: { type: "unknown" } },
+    { type: "string", enum: ["x".repeat(1001)] },
+  ])
+    assert.equal(validLearningResponseSchema(value), false);
+  let nested: unknown = { type: "string" };
+  for (let i = 0; i < 14; i++) nested = { type: "array", items: nested };
+  assert.equal(validLearningResponseSchema(nested), false);
 });
 
 test("adapter refuses unreviewed revisions before requesting any model", async () => {

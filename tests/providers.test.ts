@@ -823,3 +823,111 @@ test("comparison enforces a shared thirty-call campaign cap across individually 
     },
   );
 });
+
+test("bounded Gemini calls preserve nested schemas as a native response contract", async () => {
+  const records: RequestRecord[] = [];
+  const schema = {
+    type: "object",
+    properties: {
+      concepts: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { label: { type: "string" }, why: { type: "string" } },
+          required: ["label"],
+        },
+      },
+      examples: { type: "array", items: { type: "string" } },
+      outcomes: { type: "array", items: { type: "string" } },
+    },
+    required: ["concepts"],
+  };
+  await mock(
+    async (url, init = {}) => {
+      records.push({
+        url: String(url),
+        init,
+        body: init.body ? JSON.parse(String(init.body)) : undefined,
+      });
+      return json(
+        init.method === "POST"
+          ? completion(
+              "gemini",
+              '{"concepts":[{"label":"Memory"}],"examples":["Support"],"outcomes":["Choose context"]}',
+            )
+          : models("gemini", modelIds.gemini),
+      );
+    },
+    async () => {
+      const config = await credential("gemini", modelIds.gemini);
+      const { boundedGenerator, makeBudget } =
+        await import("../server/runs.js");
+      const generate = boundedGenerator(
+        config,
+        makeBudget(1),
+        new AbortController().signal,
+      );
+      await generate("Original structured source contract", "A customer note", {
+        responseSchema: schema,
+        maxOutputTokens: 3000,
+      });
+      const posted = records.find(
+        (record) => record.init.method === "POST",
+      )!.body;
+      assert.equal(
+        posted.generationConfig.responseMimeType,
+        "application/json",
+      );
+      assert.deepEqual(posted.generationConfig.responseJsonSchema, schema);
+      assert.equal(posted.generationConfig.maxOutputTokens, 3000);
+      assert.deepEqual(
+        schema.required,
+        ["concepts"],
+        "Optional fields must not be silently rewritten as required",
+      );
+    },
+  );
+});
+
+test("other providers retain schema instructions and their existing JSON mode", async () => {
+  const schema = {
+    type: "object",
+    properties: { answer: { type: "string" } },
+    required: ["answer"],
+  };
+  const requests: any[] = [];
+  await mock(
+    async (_url, init = {}) => {
+      if (init.method === "POST") {
+        requests.push(JSON.parse(String(init.body)));
+        return json(completion("openai", '{"answer":"fixture"}'));
+      }
+      return json(models("openai", modelIds.openai));
+    },
+    async () => {
+      const config = await credential("openai", modelIds.openai);
+      await providers.generate(config, "System", "Input", {
+        responseSchema: schema,
+      });
+      assert.deepEqual(requests[0].response_format, { type: "json_object" });
+      assert.match(
+        requests[0].messages[0].content,
+        /Return exactly one JSON object matching this schema/,
+      );
+      assert.ok(
+        requests[0].messages[0].content.includes(JSON.stringify(schema)),
+      );
+      await assert.rejects(
+        providers.generate(config, "System", "Input", {
+          responseSchema: { type: "string", description: "x".repeat(20001) },
+        }),
+        /schema exceeds/,
+      );
+      assert.equal(
+        requests.length,
+        1,
+        "Oversized contracts stop before provider inference",
+      );
+    },
+  );
+});

@@ -6,11 +6,27 @@ This Markdown file is the canonical authored diagram source. Its Mermaid fences 
 
 The user selected a standalone viewer; no in-app debug tab is included. The generated HTML loads Mermaid 11 from a CDN and needs network access to render. Diagram text stays local; the only external request is for the rendering library and its dependencies.
 
+## Current complete-flow verification boundary
+
+The latest free simulations carry state through whole customer journeys: Build API → accepted/edited graph → checks/cancellation → independent exported runner; private-source/upload → map recovery → source inspection → downloaded native helper and loopback Langfuse → diagnosis evidence → replacement/restart; and Model Lab/Evals/Red Team through mixed outcomes, versioned criteria and finite approved probes. Reported targeted receipts are 11 Build, 8 Connect and 14 assessment checks. The merged suite passes 181/181 and the production build passes. Provider traffic in these simulations is mocked in temporary workspaces. Separate production browser checks pass with external fetches blocked, including delayed plan/save controls. These checks do not establish live compatibility or model reasoning quality. Exact scope and later live acceptance belong to QA-REPORT.md.
+
+Diagram 05 now shows mutation ownership at publication: source-owned projects cannot use Build alignment, only the newest unchanged-target alignment may publish, suite updates require a real same-project prior ID, and behavioral proposals must validate before approval. A stale result cannot overwrite newer work; this does not cancel or refund an already dispatched call.
+
+Diagram 11 covers production-client consistency. Health rereads the published hashed module entry; HTML/assets use no-store. A visible production client checks every 30 seconds and on focus/visibility, offering an explicit reload for a different entry. Dirty graph changes disable reload, and other unsaved forms are warned about. No automatic refresh occurs. A tab predating this checker still needs ordinary manual reload; development clients skip the comparison.
+
+Serving mode is captured at startup: only WORKBENCH_DEV=1 enables Vite, and npm run dev opts in explicitly. Production requires dist/index.html before listening and otherwise returns build instructions through its startup error. A reproduced QA startup/build race previously selected development despite the requested production mode; the final offline browser checks were repeated after a stable production build. The missing-build regression verifies fail-before-listen. This is an environment correction, not proof of a stale-client explanation for the user's screenshot.
+
+Diagram 12 shows the subsequent browser ownership fixes. Project changes reset project-specific drafts, and run/comparison/report resolution requires the current project ID. Foreground mutations disable project/new/navigation controls. Credential catalog results remain keyed to their original request; defaults resolve against current state, refresh removes stale credential references, and model-backed actions require a current valid key with a listed available text model. Comparison effects change the graph view only on the Graph Results step. Delayed production browser checks verified the brief and three presets lock during planning, and all inspector edits, Add node and drag handles lock during save. A central graph-update guard also rejects edits while busy. Temporary locks retain accurate copy; after revision 3 saves, editing resumes and a subsequent edit remains dirty. The bundle check is preventative, not a verified cause of every earlier UI discrepancy.
+
 ## Source and export implementation
 
 GitHub acquisition accepts a validated personal access token held in server memory or the existing authenticated `gh` CLI login. The repository picker includes accessible public and private repositories; a strict HTTPS GitHub URL can also be supplied. The service clones into private managed storage before discovery. It disables inherited Git configuration, hooks, templates, filters and submodules, validates the origin and serializes concurrent publication. Existing managed checkouts are reused unchanged. Local paths and filtered folder uploads are separate acquisition options. Download or upload is not execution authorization.
 
 Diagram 04 separates acquisition, source evidence, AI interpretation and the existing trusted execution adapter. Local TypeScript/JavaScript and isolated Python parsing extract bounded candidates without executing repository code. The selected small model groups scrubbed source evidence into at most 20 proposed workflow nodes; deterministic checks validate references and retain unassigned candidates in an unresolved coverage group. Hidden supporting files remain part of the source map. Static discovery remains available without inference. No source map promises exhaustive runtime coverage.
+
+Diagrams 02 and 04 preserve the supported original adapter's structured-call contract across its sandbox boundary. The pinned source's supported Zod schema is converted to bounded JSON Schema, checked at the worker-message boundary and carried through the run budget wrapper. Schema-supplying Gemini calls use native `responseJsonSchema` and JSON MIME type; other providers receive schema instructions and their available JSON mode, followed by the original local Zod validation. That distinction is disclosed rather than represented as equivalent native enforcement. Unknown converter forms and unsupported schema vocabulary fail closed. This does not make every graph call schema-constrained, support arbitrary Zod/JSON Schema, or validate an answer's facts. The native request field follows the [Google GenerateContent API](https://ai.google.dev/api/generate-content).
+
+The structured-output correction passes 31 focused free checks, including three mocked provider calls through the original pinned overview sandbox, within the 181-test merged receipt. They verify transport and original output validation. The separate post-fix live overview completed and its one-case/five-assertion eval passed; see QA-REPORT.md for the retained initial failure, correction, scoped result and usage.
 
 Diagram 08 covers native JavaScript/Python instrumentation and manual Langfuse observations v2 import. The existing application runs in its own environment; it must reach the loopback receiver or already send observations to Langfuse. Integration keys are held in server memory and must be reconnected after restart. Langfuse imports remain partial snapshots, and span parent relationships do not establish data flow. See [CONNECTIONS.md](CONNECTIONS.md) for setup, URL restrictions, limits and examples.
 
@@ -43,22 +59,28 @@ New applications are manifest-owned; imported applications are source-owned. A r
 | Gate | Enforcer and threshold | Source |
 | --- | --- | --- |
 | Manifest graph structure | Zod: 1–80 nodes, at most 160 edges; only resource nodes may be hidden; output and feedback checks | `server/graph.ts` |
+| Alignment ownership | Manifest-owned target before inference; newest request plus unchanged graph/repo/brief/name/alignment before publication | `server/workflows.ts` |
 | Model/run input | Validated credential, available text model, non-empty input at most 40,000 characters | `server/runs.ts` |
 | Run pressure | At most 12 active runs; at most 3 provider calls active globally | `server/runs.ts` |
 | Graph budgets | 1–30 model calls, 0–3 semantic revisions, 1–180 seconds, 64–16,000 output tokens | `server/graph.ts` |
 | Dollar limits | Graph cap reserves before dispatch; optional `WORKBENCH_SPEND_LIMIT_USD` adds a persistent global ledger and rejects unknown pricing | `server/runs.ts`, `server/providers.ts` |
 | Provider input | Combined system/input at most 120,000 characters; call deadline at most 90 seconds | `server/providers.ts`, `server/runs.ts` |
+| Optional response schema | Redacted object at most 20,000 serialized characters; schema-supplying Gemini calls require structured-output capability | `server/providers.ts` |
 | Source discovery | At most 500 files, depth at most 6; source reads at most 900,000 bytes | `server/importer.ts` |
 | Folder upload | At most 500 text files, 900,000 bytes each, 10 MiB total; safe relative paths and no collisions | `server/uploads.ts` |
 | Source interpretation | Parse at most 220 files / 12 MB; at most 20 proposed semantic nodes; source and candidate validation; unresolved evidence retained | `server/source-map.ts`, `server/semantic-map.ts` |
 | Trusted import | Approved revision and 14-file allowlist, unchanged current contents, macOS sandbox | `server/importer.ts`, `server/learning-runner.ts` |
 | Imported execution | Input at most 20,000 characters; at most 6 model requests; 120 seconds | `server/learning-runner.ts` |
+| Imported schema bridge | Allowed schema vocabulary only; depth 12, at most 80 properties/required names/enum values and 5 anyOf branches; at most 20,000 serialized characters and 1–3,000 output tokens per request | `server/learning-runner.ts` |
 | Native observations | Project token; 200 spans / 1 MB per batch, 1,000 spans / 3 MB per trace; valid times and acyclic parents | `server/telemetry.ts` |
 | Langfuse import | Cloud-region allowlist or localhost; observations v2; UI window 24 hours; at most 300 observations; 12 seconds / 5 MB per response | `server/langfuse.ts` |
 | Campaigns | 2–5 comparison slots; 1–20 eval cases; at most 6 red-team probes; shared budget at most 30 calls | `server/workflows.ts` |
+| Assessment identity | Prior suite ID must exist in the same project; behavioral probes require allowed specialist and nonempty string input/description | `server/workflows.ts` |
 | Source-review evidence | At most 30 files / 60,000 numbered characters, 8,000/file and 1,200/line; protected reads and whole-file scrubbing | `server/source-review.ts` |
 | Approved source review | Free plan; unchanged target/evidence; at most 1 call, US$0.25, 90 seconds, 4,096 output tokens; at most 12 citation-checked suspected findings | `server/workflows.ts`, `server/source-review.ts` |
 | Arbitrary code | Docker image required; no network; 128MB; 0.5 CPU; 32 PIDs; 15 seconds | `server/sandbox.ts` |
+| Client version | Production bundle comparison at 30-second visible-client intervals and on focus/visibility; dirty graph disables explicit reload | `server/index.ts`, `web/App.tsx` |
+| Browser ownership | Project-scoped draft/result resolution, busy navigation guard, current validated credential plus available text-model selection | `web/App.tsx` |
 
 These are implementation limits, not promises of exact provider billing or complete security isolation. Source restrictions, runtime behavior and UI coverage still require the journey tests in `Loop.MD`. The configured global spend ledger is a local estimate, not an account-wide provider billing limit.
 
@@ -76,6 +98,8 @@ These are implementation limits, not promises of exact provider billing or compl
 | External observations | `08-external-observation.mmd` | `server/telemetry.ts`, `server/langfuse.ts`, `sdk/workbench-client.mjs`, `sdk/workbench-client.py` |
 | Graph presentation | `09-graph-presentation.mmd` | `web/graph-presentation.ts`, `web/App.tsx`, `web/styles.css` |
 | Source review | `10-source-review.mmd` | `server/source-review.ts`, `server/workflows.ts`, red-team API/UI |
+| Client consistency | `11-client-version.mmd` | `server/index.ts`, `web/App.tsx` |
+| Browser ownership | `12-ui-ownership.mmd` | `web/App.tsx` |
 
 ## Diagrams
 
@@ -85,7 +109,8 @@ These are implementation limits, not promises of exact provider billing or compl
 %% 01 MASTER — local application and ownership boundaries
 %% IMPLEMENTED means source inspected, not that every live journey has passed QA.
 flowchart TD
-UI["IMPLEMENTED · Five-mode workspace<br/>[LIBRARY · React + React Flow]<br/>in: user goal, graph edits, selected model<br/>out: same-origin API request"]:::data
+UI["IMPLEMENTED · Five-mode workspace<br/>[LIBRARY · React + React Flow]<br/>in: user goal, graph edits, selected model<br/>out: same-origin API request<br/>project/model ownership gates: see diagram 12"]:::data
+VERSION["IMPLEMENTED · Detect newer published interface<br/>[FUNCTION]<br/>in: loaded entry and local health uiEntry<br/>out: user-controlled reload notice; no automatic refresh<br/>see diagram 11"]:::fn
 API["IMPLEMENTED · Local API boundary<br/>[FUNCTION]<br/>in: browser request on loopback<br/>out: local operation after Host, Origin and JSON checks"]:::fn
 MODE{"IMPLEMENTED · Operation selection<br/>[FUNCTION]<br/>in: requested mode<br/>out: owning module"}:::dec
 ALIGN["IMPLEMENTED · Alignment and generation<br/>[AGENT · selected config.model]<br/>in: brief and answers<br/>out: questions, assumptions and graph<br/>see diagram 05"]:::agent
@@ -99,6 +124,7 @@ STORE["IMPLEMENTED · Local workspace and event journal<br/>[DATA · private JSO
 PRESENT["IMPLEMENTED · Present graph and recorded scope<br/>[FUNCTION]<br/>in: authoritative graph and node events<br/>out: local layout, source overview or external recorded path<br/>see diagram 09; no execution or graph rewrite"]:::fn
 RESULT["IMPLEMENTED · Inspect selected invocation<br/>[FUNCTION]<br/>in: recorded graph, input, output, status<br/>out: node detail and visible run state"]:::term
 UI --> API --> MODE
+UI -.->|"visible production client; 30s or focus"| VERSION
 MODE -->|"Build alignment"| ALIGN
 MODE -->|"Build execution"| RUN
 MODE -->|"Connect and Debug"| REPO
@@ -137,7 +163,8 @@ VAULT["Retain key in server memory<br/>[DATA · credential Map]<br/>in: provider
 LIST["Discover account-accessible models<br/>[FUNCTION]<br/>in: credential ID<br/>out: provider model metadata"]:::fn
 CAPS["Apply text adapter capability rules<br/>[FUNCTION]<br/>in: metadata and model ID<br/>out: advertised support and verified flag"]:::fn
 CHECK{"Selected model available and key validated?<br/>[FUNCTION]<br/>in: config and cached catalog<br/>out: ready or explicit error"}:::dec
-ADAPT["Build fixed-endpoint provider request<br/>[FUNCTION]<br/>in: system prompt, input, token limit<br/>out: Gemini, OpenAI, Anthropic, Groq or OpenRouter body"]:::fn
+SCHEMA{"Optional response schema accepted?<br/>[FUNCTION]<br/>in: redacted schema object of at most 20000 serialized chars<br/>out: structured request or explicit rejection<br/>Gemini model must advertise structured support"}:::dec
+ADAPT["Build fixed-endpoint provider request<br/>[FUNCTION]<br/>in: system prompt, input, token limit and optional schema<br/>out: provider-specific body<br/>Gemini schema uses responseJsonSchema and JSON MIME type;<br/>other providers use schema instructions and available JSON mode"]:::fn
 SPEND{"Configured global spend guard permits call?<br/>[FUNCTION]<br/>in: known pricing and conservative token reserve<br/>out: reserve before dispatch or reject<br/>WORKBENCH_SPEND_LIMIT_USD, when configured"}:::dec
 LEDGER["Record persistent spend reservation<br/>[DATA · private usage.json]<br/>in: reservation and successful reported usage<br/>out: spend carried across server restarts"]:::data
 LLM["Generate model response<br/>[AGENT · config.model]<br/>in: model-specific request<br/>out: text, stop reason and reported usage"]:::agent
@@ -149,7 +176,9 @@ SOURCE -->|"local file"| FILE
 SESSION --> VAULT
 FILE --> VAULT
 VAULT --> LIST --> CAPS --> CHECK
-CHECK -->|"yes"| ADAPT --> SPEND
+CHECK -->|"yes"| SCHEMA
+SCHEMA -->|"no schema or accepted contract"| ADAPT --> SPEND
+SCHEMA -->|"invalid, oversized or unsupported Gemini capability"| ERROR
 SPEND -->|"allowed or guard not configured"| LLM --> NORMALIZE --> RECORD
 SPEND -->|"configured: reserve before call"| LEDGER
 SPEND -->|"unknown rate or exhausted"| ERROR
@@ -235,9 +264,11 @@ TRUST{"Approved source and platform?<br/>[FUNCTION]<br/>in: adapter, pinned revi
 OPAQUE["Retain discovery-only map<br/>[DATA · source references]<br/>in: unsupported or changed source<br/>out: coverage and opaque components; no execution"]:::term
 GIT["Read exact committed source<br/>[FUNCTION]<br/>in: approved revision and source allowlist<br/>out: source matching current files<br/>replacement objects disabled; inherited GIT overrides removed"]:::fn
 BUNDLE["Bundle pinned overview with test shims<br/>[LIBRARY · esbuild]<br/>in: verified source, bridge, local libraries<br/>out: scratch runner without provider keys"]:::data
-OS["Start reviewed-source worker<br/>[LIBRARY · macOS sandbox-exec]<br/>in: scratch bundle and request<br/>out: constrained process<br/>no network, file writes or process fork; 256MB JS heap"]:::data
+OS["Start reviewed-source worker<br/>[LIBRARY · macOS sandbox-exec]<br/>in: scratch bundle and request<br/>out: constrained process with original local Zod validation<br/>no network, file writes or process fork; 256MB JS heap"]:::data
+SHAPE["Preserve original structured-call contract<br/>[FUNCTION]<br/>in: original pinned Zod schema and model request<br/>out: supported JSON schema plus JSON flag across IPC<br/>unsupported converter types fail closed"]:::fn
 BRIDGE["Validate worker messages<br/>[FUNCTION]<br/>in: JSON lines from worker<br/>out: event or bounded provider request<br/>2MB message, 12MB total stdout, at most 6 model requests"]:::fn
-LLM["Execute mediated model call<br/>[AGENT · run.config.model]<br/>in: original source prompts and bounded request<br/>out: response returned over stdin; key stays in parent"]:::agent
+SCHEMA{"Structured IPC within reviewed vocabulary and limits?<br/>[FUNCTION]<br/>in: optional schema with JSON flag and token request<br/>out: bounded gateway call or protocol rejection<br/>schema at most 20000 chars, depth 12, 80 properties/enums;<br/>anyOf at most 5; output tokens 1–3000"}:::dec
+LLM["Execute mediated model call<br/>[AGENT · run.config.model]<br/>in: original prompts, preserved schema and bounded request<br/>out: response over stdin; key stays in parent<br/>Gemini native JSON Schema; other providers prompted JSON"]:::agent
 ART["Render isolated overview artifact<br/>[FUNCTION]<br/>in: original schema-validated overview<br/>out: original HTML and in-memory artifact; no DB or billing"]:::fn
 RESULT["Return overview result and trace<br/>[FUNCTION]<br/>in: artifact and observed invocation events<br/>out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
 CLEAN["Force-stop and remove scratch files<br/>[FUNCTION]<br/>in: error, cancellation or 120-second deadline<br/>out: terminated worker and preserved partial trace"]:::term
@@ -251,7 +282,10 @@ METHOD -->|"static discovery; no inference"| MAP
 MAP -->|"explicit supported run request only"| TRUST
 TRUST -->|"unsupported or mismatched"| OPAQUE
 TRUST -->|"approved overview only"| GIT --> BUNDLE --> OS --> BRIDGE
-BRIDGE -->|"model request"| LLM
+OS -->|"structured model invocation"| SHAPE --> BRIDGE
+BRIDGE -->|"model request"| SCHEMA
+SCHEMA -->|"valid or no schema"| LLM
+SCHEMA -->|"invalid or out of bounds"| CLEAN
 LLM -->|"response, never credential"| OS
 BRIDGE -->|"completed original render"| ART --> RESULT
 OS -.->|"timeout, cancellation, protocol error"| CLEAN
@@ -268,7 +302,11 @@ classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 ```mermaid
 %% 05 IMPLEMENTED — alignment, comparison, red-team and evaluation coordination
 flowchart TD
+OWNER{"Manifest-owned Build target?<br/>[FUNCTION]<br/>in: project and alignment request<br/>out: permitted planning or source-owned rejection"}:::dec
+CAPTURE["Capture planning ownership<br/>[FUNCTION]<br/>in: project graph, source, brief, name and prior alignment<br/>out: state references and newest request identity"]:::fn
 ALIGN["Align the requested app<br/>[AGENT · selected config.model]<br/>in: brief; one planning call, 5000 output tokens<br/>out: assumptions, questions and 1–5 proposed agents<br/>The model writes clarification questions"]:::agent
+PUBLISH{"Valid proposal, newest request and unchanged project?<br/>[FUNCTION]<br/>in: generated graph and captured/current state<br/>out: publish proposal or retain newer work"}:::dec
+REJECT["Reject without overwriting current state<br/>[FUNCTION]<br/>in: source-owned target, stale response or invalid identity/proposal<br/>out: actionable error; no target execution<br/>an already dispatched planning call may still incur cost"]:::term
 ASK["Present open questions<br/>[FUNCTION]<br/>in: model-written questions<br/>out: user updates the brief and requests a new plan"]:::ask
 APPROVE{"User accepts the proposed graph?<br/>[FUNCTION]<br/>in: explicit Accept action<br/>out: saved revision or further alignment"}:::dec
 COMPARE["Prepare candidate slots<br/>[FUNCTION]<br/>in: one input, 2–5 configs, node/workflow strategy<br/>out: supported candidates with shared budget at most 30 calls"]:::fn
@@ -276,11 +314,13 @@ REDMODE{"Choose red-team capability<br/>[FUNCTION]<br/>in: imported source or ex
 SOURCEPLAN["Prepare and approve source review<br/>[FUNCTION]<br/>in: protected imported source and brand criteria<br/>out: source-only suspected or inconclusive findings<br/>free plan; approved review at most 1 call, USD 0.25, 90s<br/>see diagram 10; no target execution"]:::fn
 UNSUPPORTED["Explain unavailable behavioral runner<br/>[FUNCTION]<br/>in: unsupported imported execution request<br/>out: source-review option before any planner call"]:::term
 RED["Produce bounded behavioral plan<br/>[AGENT · selected config.model]<br/>in: supported target, local-test or owned-staging and brand rules<br/>out: at most 6 synthetic security, brand or customer probes<br/>one planning call, 2200 output tokens"]:::agent
+VALIDPROBE{"Probe shape is valid?<br/>[FUNCTION]<br/>in: selected probes within maxProbes 1–6<br/>out: persist approvable plan or reject<br/>allowed specialist, nonempty input/description, string failure signal"}:::dec
 SCOPE{"User confirms the finite plan?<br/>[FUNCTION]<br/>in: confirmed=true and proposed campaign<br/>out: start once or retain proposed state"}:::dec
 PIN{"Approved target still matches?<br/>[FUNCTION]<br/>in: graph/repository fingerprint and current target<br/>out: accept or require new plan<br/>historical unpinned plans reject"}:::dec
 STALE["Require a new plan<br/>[FUNCTION]<br/>in: changed target or missing fingerprint<br/>out: no campaign execution"]:::term
 SOURCE["Review supported source heuristics<br/>[FUNCTION]<br/>in: inspected importer rules or manifest prompts<br/>out: suspected findings, not reproduced vulnerabilities"]:::fn
-CASES["Save evaluation suite version<br/>[FUNCTION]<br/>in: 1–20 cases, assertions and optional judge rubric<br/>out: immutable suite version and report with pinned criteria"]:::fn
+SUITEOWNER{"Existing version belongs to this project?<br/>[FUNCTION]<br/>in: selected project and optional prior suite ID<br/>out: accept new/same-project lineage or reject missing/foreign ID"}:::dec
+CASES["Save evaluation suite version<br/>[FUNCTION]<br/>in: verified lineage, 1–20 cases, assertions and optional judge rubric<br/>out: new immutable suite ID and incremented version"]:::fn
 SCHEDULE["Execute each accepted work item<br/>[FUNCTION]<br/>in: pinned graph/repo, config/input and campaign budget at most 30<br/>out: independent run and invocation events<br/>manifest or supported source adapter"]:::fn
 KIND{"Which result consumer?<br/>[FUNCTION]<br/>in: completed or partial run<br/>out: comparison, evaluation or red-team evidence"}:::dec
 ASSERT["Evaluate deterministic assertions<br/>[FUNCTION]<br/>in: case output, contains/JSON/length/regex rules<br/>out: reasons; regex execution limited to 30ms"]:::fn
@@ -291,21 +331,27 @@ LITERAL["Check literal failure signal<br/>[FUNCTION]<br/>in: prohibited substrin
 REVIEW["Review semantic behavior<br/>[AGENT · selected config.model]<br/>in: expected behavior, brand rules and candidate<br/>out: suspected or passed finding; maximum 512 output tokens<br/>human confirmation required for suspected violations"]:::agent
 HISTORY["Persist grouped evidence<br/>[DATA · workspace snapshots]<br/>in: comparisons, suites, reports, campaigns and run links<br/>out: retained partial and completed evidence"]:::data
 PROMOTE["Draft regression case<br/>[FUNCTION]<br/>in: selected trace/finding input and run ID<br/>out: editable expectation and assertions awaiting review"]:::fn
-ALIGN --> ASK
-ASK -.->|"answers appended to brief"| ALIGN
-ALIGN --> APPROVE
+OWNER -->|"manifest-owned"| CAPTURE --> ALIGN --> PUBLISH
+OWNER -->|"source-owned; before model call"| REJECT
+PUBLISH -->|"valid and current"| ASK
+PUBLISH -->|"valid and current"| APPROVE
+PUBLISH -->|"invalid, stale or superseded"| REJECT
+ASK -.->|"answers appended to brief; new request"| OWNER
 APPROVE -->|"accepted; run requested separately"| SCHEDULE
-APPROVE -->|"revise"| ALIGN
+APPROVE -->|"revise"| OWNER
 COMPARE --> SCHEDULE
 REDMODE -->|"source review; connected repository required"| SOURCEPLAN --> HISTORY
 REDMODE -->|"behavioral; manifest or supported adapter"| RED
 REDMODE -->|"behavioral; unsupported import"| UNSUPPORTED
-RED --> SCOPE
+RED --> VALIDPROBE
+VALIDPROBE -->|"valid"| SCOPE
+VALIDPROBE -->|"invalid"| REJECT
 SCOPE -->|"confirmed"| PIN
 PIN -->|"same approved target"| SOURCE --> SCHEDULE
 PIN -->|"changed or unpinned"| STALE
 SCOPE -->|"not confirmed"| RED
-CASES --> SCHEDULE --> KIND
+SUITEOWNER -->|"no prior ID or same-project version"| CASES --> SCHEDULE --> KIND
+SUITEOWNER -->|"missing or foreign prior ID"| REJECT
 KIND -->|"comparison: retain each candidate"| HISTORY
 KIND -->|"eval: successful execution"| ASSERT
 KIND -->|"red team: successful execution"| PROBE
@@ -314,7 +360,7 @@ ASSERT -->|"judge configured"| JUDGE --> EVAL
 ASSERT -->|"deterministic only"| EVAL --> HISTORY
 PROBE -->|"yes"| LITERAL --> HISTORY
 PROBE -->|"no"| REVIEW --> HISTORY
-HISTORY --> PROMOTE --> CASES
+HISTORY --> PROMOTE --> SUITEOWNER
 classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
 classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
 classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
@@ -504,6 +550,81 @@ classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
 classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 ```
 
+<!-- diagram: 11-client-version.mmd -->
+
+```mermaid
+%% 11 IMPLEMENTED — detect a newer production client without discarding work
+flowchart TD
+MODE{"Explicit development mode enabled?<br/>[FUNCTION]<br/>in: WORKBENCH_DEV captured at startup<br/>out: Vite only for value 1, otherwise production"}:::dec
+DEV["Start requested development server<br/>[LIBRARY · Vite middleware]<br/>in: WORKBENCH_DEV=1 from npm run dev<br/>out: development client; no production-entry comparison"]:::term
+BUILD{"Production build exists before listen?<br/>[FUNCTION]<br/>in: dist/index.html at startup<br/>out: serve production or fail without a listener"}:::dec
+MISSING["Reject missing production build<br/>[FUNCTION]<br/>in: absent dist/index.html<br/>out: explicit npm run build instructions; no Vite fallback"]:::term
+HTML["Serve the published interface<br/>[FUNCTION]<br/>in: current dist HTML and hashed assets<br/>out: static response with Cache-Control no-store"]:::fn
+LOAD["Capture loaded module identity<br/>[FUNCTION]<br/>in: current page module-script source<br/>out: loaded entry path"]:::fn
+PROD{"Loaded path starts with /assets/?<br/>[FUNCTION]<br/>in: loaded entry path<br/>out: production check or no comparison"}:::dec
+SKIP["Keep current development client<br/>[FUNCTION]<br/>in: no production entry path<br/>out: no release-comparison timer"]:::term
+TRIGGER["Schedule visible-client checks<br/>[FUNCTION]<br/>in: initial load, focus, visibility event or 30000ms interval<br/>out: health request while document is visible"]:::fn
+HEALTH["Read current published entry<br/>[FUNCTION]<br/>in: local health request and current dist/index.html<br/>out: uiEntry path or null<br/>entry is reread on each request"]:::fn
+MATCH{"Published entry differs from loaded entry?<br/>[FUNCTION]<br/>in: non-null uiEntry and loaded path<br/>out: update banner or unchanged client"}:::dec
+KEEP["Continue existing client<br/>[FUNCTION]<br/>in: same entry, missing entry or unreachable check<br/>out: no automatic reload"]:::term
+BANNER["Present update notice<br/>[FUNCTION]<br/>in: different published entry and draft state<br/>out: reload option with explicit unsaved-work warning<br/>message is fixed UI text, not model-written"]:::ask
+DIRTY{"Unsaved graph changes?<br/>[FUNCTION]<br/>in: current dirty graph flag<br/>out: disabled reload or user-controlled action"}:::dec
+SAVE["Wait for graph save<br/>[FUNCTION]<br/>in: dirty graph and visible update notice<br/>out: existing work retained; reload disabled"]:::ask
+RELOAD["Reload on explicit user action<br/>[FUNCTION]<br/>in: user clicks Reload app; other unsaved forms were warned about<br/>out: request current published interface"]:::fn
+MODE -->|"value 1"| DEV
+MODE -->|"any other value"| BUILD
+BUILD -->|"exists"| HTML --> LOAD --> PROD
+BUILD -->|"missing"| MISSING
+PROD -->|"production entry"| TRIGGER --> HEALTH --> MATCH
+PROD -->|"development or no module path"| SKIP
+HEALTH -->|"request fails or no entry"| KEEP
+MATCH -->|"different entry"| BANNER --> DIRTY
+MATCH -->|"same entry"| KEEP
+DIRTY -->|"yes"| SAVE
+DIRTY -->|"no; user chooses reload"| RELOAD --> HTML
+SAVE -.->|"user saves graph"| DIRTY
+KEEP -.->|"next visible-client check"| TRIGGER
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+```
+
+<!-- diagram: 12-ui-ownership.mmd -->
+
+```mermaid
+%% 12 IMPLEMENTED in inspected source — project/model ownership; post-fix browser gate is separate
+flowchart TD
+SWITCH{"Foreground mutation active?<br/>[FUNCTION]<br/>in: requested project/new/navigation action and busy state<br/>out: wait or permit selection change"}:::dec
+WAIT["Retain mutation context<br/>[FUNCTION]<br/>in: active foreground operation<br/>out: project/new/navigation, presets and graph editors disabled<br/>central graph-update/connection guard rejects edits;<br/>temporary lock is separate from read-only ownership"]:::term
+RESET["Reset project-specific drafts<br/>[FUNCTION]<br/>in: resolved new project identity<br/>out: fresh eval, input, slot, baseline, brand and view selections"]:::fn
+HISTORY["Resolve selected history within project<br/>[FUNCTION]<br/>in: selected IDs and current project ID<br/>out: matching run, comparison, campaign or report; no foreign result"]:::fn
+VIEW["Render the selected workspace<br/>[LIBRARY · React]<br/>in: project drafts and owned immutable evidence<br/>out: current-project forms and inspectors<br/>comparison effects set graph view only on Graph Results"]:::data
+SELECT["Select a workbench credential<br/>[FUNCTION]<br/>in: user-selected credential ID<br/>out: cleared model selection and catalog request"]:::fn
+CATALOG["Cache returned model catalog<br/>[FUNCTION]<br/>in: response and original request credential ID<br/>out: catalog under that credential, independent of current choice"]:::fn
+DEFAULT["Resolve model defaults from current selection<br/>[FUNCTION]<br/>in: current credential and its cached model list<br/>out: compatible default only where selection is empty<br/>late response cannot choose another credential's model"]:::fn
+REFRESH["Reconcile server credential metadata<br/>[FUNCTION]<br/>in: refreshed valid credential IDs and browser references<br/>out: stale current/slot credentials and catalogs removed"]:::fn
+READY{"Current credential and selected model ready?<br/>[FUNCTION]<br/>in: valid server key ID and current cached model<br/>out: allowed action or configuration recovery<br/>model must be available and text-capable"}:::dec
+CONFIG["Ask for a valid model configuration<br/>[FUNCTION]<br/>in: invalid/missing key or incompatible model<br/>out: fixed configuration message and credential dialog"]:::ask
+REQUEST["Dispatch the selected action<br/>[FUNCTION]<br/>in: current project plus verified selection<br/>out: bounded API request; server independently validates"]:::term
+SWITCH -->|"busy"| WAIT
+SWITCH -->|"not busy; new project resolved"| RESET --> HISTORY --> VIEW
+SELECT --> CATALOG --> DEFAULT --> READY
+REFRESH --> DEFAULT
+VIEW -->|"user requests model-backed action"| READY
+READY -->|"validated key and compatible listed model"| REQUEST
+READY -->|"not ready"| CONFIG
+CONFIG -.->|"user configures credential"| SELECT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+```
+
 ## Regeneration and validation
 
 After editing these Mermaid fences, mirror each block into its named `.mmd` file. Then run:
@@ -513,7 +634,7 @@ node /Users/macbook/.agents/skills/power-coding/scripts/validate-mmd.mjs docs/me
 node /Users/macbook/.agents/skills/power-coding/scripts/build-html.mjs docs/mermaid docs/architecture-flow.html
 ```
 
-The original seven-diagram snapshot passed Mermaid parsing and browser rendering; the subsequent connection and graph snapshots passed the real Mermaid parser. The red-team correction adds diagram 10 and updates the master/product-mode boundaries. **All ten diagrams pass the real Mermaid parser**, all canonical fences match their `.mmd` sources, and the standalone viewer was regenerated. No browser was launched for this documentation check. A successful parse alone does not establish readable layout. The viewer is a documentation artifact, not a runtime debug tab.
+The original seven-diagram snapshot passed Mermaid parsing and browser rendering; subsequent connection, graph and source-review snapshots passed the real Mermaid parser. This milestone updates diagrams 01/05 and adds client consistency and browser ownership in diagrams 11/12. **All 12 diagrams pass the real Mermaid parser**, canonical fences match their `.mmd` files, and the standalone viewer was regenerated. This is independent of application/browser acceptance; no browser was used for the documentation check. A successful parse alone does not establish readable layout. The viewer is a documentation artifact, not a runtime debug tab.
 
 ## Known boundaries
 

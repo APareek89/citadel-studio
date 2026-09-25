@@ -119,3 +119,70 @@ Why 3: the earlier supported overview test did not exercise an ordinary discover
 Deepest why [design/testing]: connect, observe, source review and execute require separate capability contracts before the user submits work.
 Action: every imported repository can prepare a bounded source-review plan without credentials or inference. Explicit approval plus a compatible model starts at most one review call, capped at US$0.25 and 90 seconds; no target code or probes execute. Behavioral mode remains gated to executable manifests or the supported adapter. Graph/repository fingerprints and current source-evidence digests reject stale or historical unpinned plans before a call. Strict schema and exact supplied path/line/quote checks admit only suspected findings; invalid evidence stays inconclusive. The source viewer explicitly shows the current checkout, while the saved quotation is the review evidence.
 Prevention: eight free integration fixtures cover keyless planning, unsupported behavior, one-call/no-target completion, missing credentials, graph/source drift, double starts and malformed output. Ten helper checks cover evidence bounds and citations. Full-suite and browser acceptance for this change are recorded separately in QA-REPORT.md; fixture success does not establish live review quality or a general Demo Studio runtime.
+
+## 2026-09-25 — Passing components did not establish complete customer journeys
+Symptom: the user asked for whole-flow simulation before further live work; prior test totals and selected successful screens had left cross-step failures untested.
+Why 1: checks often began with prepared projects, credentials or traces rather than exercising how the user reaches those states.
+Why 2: service correctness and completed customer outcomes were being counted together.
+Deepest why [process/testing]: test the state transitions between product steps, including recovery and switching projects, before using component counts as release evidence.
+Action: add isolated Build HTTP/independent-ZIP, Connect HTTP/downloaded-native-helper/loopback-Langfuse, and Model Lab/Evals/Red Team workflow simulations. Provider traffic is mocked and state is temporary; these checks spend no live API budget. Report their 11, 8 and 14 passing checks separately from merged-suite, browser and live gates.
+Prevention: start from missing credentials or source, carry generated IDs and revisions through the full journey, preserve deliberate failures and prove recovery. Browser usability and real external integration remain separate gates; a controlled provider fixture does not establish model quality or account access.
+
+## 2026-09-25 — Delayed planning and foreign identities could overwrite user intent
+Symptom: full-flow fixtures exposed stale alignment publication, Build planning on source-owned projects, and eval updates accepting missing or another project's suite ID.
+Why 1: a successful asynchronous result was allowed to publish without rechecking the state it was prepared for; suite versioning treated its prior ID as an optional lookup hint.
+Why 2: validation focused on object shape instead of ownership and the user's latest action.
+Deepest why [design]: every mutation needs both a valid value and an authoritative owner/version at publication time.
+Action: source-owned projects reject Build planning before inference. Alignment assigns the latest request identity and checks graph, repo, brief, name and prior alignment before publication; a stale response cannot overwrite newer work. Eval version creation rejects missing or foreign suite IDs before storing a new version. Behavioral plans validate specialist, nonempty input/description and optional string failure signal before becoming approvable.
+Prevention: delayed-response, concurrent-plan, project-switch, malformed-probe and missing-ID cases remain in the free journey suites. Rejected in-flight results may have consumed their original model call; preserving state is not cancellation or a billing reversal.
+
+## 2026-09-25 — An open browser can keep using an older built interface
+Symptom: rebuilding the local app does not replace JavaScript already loaded in the user's tab.
+Why 1: the browser keeps running its loaded module; a current server alone does not prove a current client.
+Deepest why [delivery]: expose client/server release mismatch and let the user preserve edits before reloading.
+Action: production health reports the current hashed UI entry, published HTML/assets use no-store, and the client checks on focus/visibility and every 30 seconds while visible. A changed entry shows an update banner; dirty graph edits disable reload and other unsaved forms are explicitly warned about. The app never reloads automatically.
+Prevention: verify the health/header contract and the actual banner/reload journey independently. This checker protects clients that already contain it; it cannot retrofit a previously loaded older bundle. Browser acceptance for this change belongs in QA-REPORT.md.
+
+## 2026-09-25 — API isolation did not guarantee project isolation in the interface
+Symptom: the subsequent UI audit found eval inputs, comparison slots, baseline and brand drafts carrying from project A into B; run/comparison/report lookup was not project-scoped. Late model-list responses could also overwrite the currently selected credential's model, while removed server credentials remained selected.
+Why 1: local React state survived project switches and asynchronous callbacks captured earlier choices.
+Why 2: the API suites correctly isolated stored projects but did not simulate the browser's long-lived selection state.
+Deepest why [state/testing]: ownership must be checked in both the server mutation and the browser draft/selection; neither layer substitutes for the other.
+Action: root added project-specific draft resets and scoped history resolution, disabled project/new/navigation controls during foreground mutations, reconciled removed/invalid credentials on refresh, and restricted defaults and required model selection to the current credential's compatible catalog. Source inspection confirms these changes; the subsequent UI/browser gate is still recorded separately.
+Prevention: deliberately fill A's drafts, switch to B, inspect results, race two model catalogs and remove/restart credentials before returning to the screen. The 177-test/build receipt preceded these UI fixes and cannot be reused as their final acceptance. Release-mismatch detection is preventative, not proof that a stale bundle caused every earlier screen discrepancy.
+
+## 2026-09-25 — A production QA server silently became a development server
+Symptom: offline QA startup overlapped a Vite build temporarily removing dist; the server fell back to Vite despite WORKBENCH_DEV=0. HMR resets meant the early UI checks exercised development behavior.
+Why 1: startup mode depended on the incidental presence of build output rather than the explicit requested mode.
+Deepest why [environment]: a verification environment must fail when its prerequisite is missing, not silently test a different product surface.
+Action: capture development mode once; only WORKBENCH_DEV=1 enables Vite, and npm run dev sets it explicitly. Production startup without dist/index.html now fails before listening with build instructions. Health reports the captured mode's entry behavior. Root restarted production QA after a stable build and repeated the affected offline checks; the missing-build regression verifies fail-before-listen.
+Prevention: build to completion, start the intended mode and verify the served hashed production entry before calling browser evidence production acceptance. This was a reproduced QA-environment defect, not proof of the cause of the user's earlier screenshot.
+
+## 2026-09-25 — Busy state protected navigation but still allowed conflicting edits
+Symptom: read-only review found that brief presets could replace the visible brief during planning, and graph edits remained possible while a save was in flight. The save response then replaced the newer local draft and cleared dirty state.
+Why 1: disabling the textarea, Save button and project navigation did not disable every path that mutates the same state.
+Deepest why [state]: a pending mutation needs one central ownership rule, reinforced by every visible editor control.
+Action: brief presets now disable while busy. The central updateGraph and connection handlers reject busy mutations; add-node, node dragging/connecting, inspector editors and limits disable too. The inspector keeps source/historical read-only state separate from its temporary lock so an ordinary draft is not falsely labelled an immutable run.
+Prevention: deliberately delay planning/save and try presets, typing, graph connections and limits before the response arrives. Root's production offline browser check injected 1,500ms model and PUT delays with external fetch blocked: textarea/presets and all graph mutation controls stayed disabled, the draft showed no false immutable-history message, revision 3 saved, and editing resumed with dirty state. The latest merged receipt is 181/181 with a passing build; earlier 178-test evidence remains historical.
+
+## 2026-09-25 — Comparison observation state affected another screen
+Symptom: a Model Lab comparison effect could reapply observed view while the user was returning to the current draft.
+Why 1: the effect changed a shared graph-view state beyond the screen that owned the comparison presentation.
+Deepest why [state]: transient result selection must be scoped to its consuming screen as well as its project.
+Action: the comparison effect sets the graph view only on Graph Results. Current-draft navigation remains a deliberate design-view action, while recorded candidate graphs stay immutable.
+Prevention: include comparison → graph result → current draft → edit in the UI journey. Root's repeated production offline checks cover graph results, project/input/suite reset, busy project/mode controls, approved red-team execution, credential loss after restart and the dirty/saved update-banner path. The final busy-guard checks also passed; the separate adapter correction subsequently passed its same-input live run and one-case scored eval (QA-REPORT.md).
+
+## 2026-09-25 — Provider substitution weakened the original structured-output contract
+Symptom: live imported-app testing exposed that the isolated model shim retained schema instructions and local validation but dropped the original structured-call schema at the provider boundary.
+Why 1: the bounded model-call interface carried text and token limits but no response schema.
+Why 2: a prompt requesting JSON was treated as equivalent to the original structured generation contract.
+Deepest why [adapter design]: replacing a provider must preserve the caller's required response contract, or explicitly disclose and gate the weaker capability.
+Action: the pinned Zod shim now carries its supported response schema plus JSON intent through bounded, validated IPC and the common generator. Gemini receives native responseJsonSchema/JSON MIME configuration; other providers retain disclosed schema instructions/available JSON mode and original local Zod validation. Unsupported converter types and out-of-bounds schemas reject; no provider fallback was added and the original app source remains unchanged.
+Prevention: inspect the actual outbound request shape, nested required fields and enum/array contracts, not only a convenient valid mock response. Root reports 31 focused checks, including original sandbox execution with three fixture model calls, and 181/181 merged tests/build. These establish schema transport and local validation; the same-input live overview subsequently completed and a one-case/five-assertion eval passed (QA-REPORT.md). A native schema does not establish factual correctness or exhaustive Zod/provider equivalence.
+
+
+## 2026-09-25 — Alternate navigation bypassed foreground locks
+Symptom: final staged review found Quick Find, Cmd+K and the brand link could change mode despite disabled sidebar controls, letting a late completion apply its step to the wrong mode.
+Deepest why [state]: lock a shared navigation boundary as well as visible controls; keyboard and modal routes are still user journeys.
+Action: central navigation checks busy state; Quick Find/hidden-node actions and keyboard entry respect that state. The delayed production offline browser check kept Build/Review during brand click and Cmd+K while Save was pending, then opened Quick Find normally after completion. Intended completion callbacks retain their original operation context.
+Prevention: include alternate keyboard and modal entry points in race reviews, not only the primary sidebar path.

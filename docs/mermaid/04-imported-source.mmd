@@ -18,9 +18,11 @@ TRUST{"Approved source and platform?<br/>[FUNCTION]<br/>in: adapter, pinned revi
 OPAQUE["Retain discovery-only map<br/>[DATA · source references]<br/>in: unsupported or changed source<br/>out: coverage and opaque components; no execution"]:::term
 GIT["Read exact committed source<br/>[FUNCTION]<br/>in: approved revision and source allowlist<br/>out: source matching current files<br/>replacement objects disabled; inherited GIT overrides removed"]:::fn
 BUNDLE["Bundle pinned overview with test shims<br/>[LIBRARY · esbuild]<br/>in: verified source, bridge, local libraries<br/>out: scratch runner without provider keys"]:::data
-OS["Start reviewed-source worker<br/>[LIBRARY · macOS sandbox-exec]<br/>in: scratch bundle and request<br/>out: constrained process<br/>no network, file writes or process fork; 256MB JS heap"]:::data
+OS["Start reviewed-source worker<br/>[LIBRARY · macOS sandbox-exec]<br/>in: scratch bundle and request<br/>out: constrained process with original local Zod validation<br/>no network, file writes or process fork; 256MB JS heap"]:::data
+SHAPE["Preserve original structured-call contract<br/>[FUNCTION]<br/>in: original pinned Zod schema and model request<br/>out: supported JSON schema plus JSON flag across IPC<br/>unsupported converter types fail closed"]:::fn
 BRIDGE["Validate worker messages<br/>[FUNCTION]<br/>in: JSON lines from worker<br/>out: event or bounded provider request<br/>2MB message, 12MB total stdout, at most 6 model requests"]:::fn
-LLM["Execute mediated model call<br/>[AGENT · run.config.model]<br/>in: original source prompts and bounded request<br/>out: response returned over stdin; key stays in parent"]:::agent
+SCHEMA{"Structured IPC within reviewed vocabulary and limits?<br/>[FUNCTION]<br/>in: optional schema with JSON flag and token request<br/>out: bounded gateway call or protocol rejection<br/>schema at most 20000 chars, depth 12, 80 properties/enums;<br/>anyOf at most 5; output tokens 1–3000"}:::dec
+LLM["Execute mediated model call<br/>[AGENT · run.config.model]<br/>in: original prompts, preserved schema and bounded request<br/>out: response over stdin; key stays in parent<br/>Gemini native JSON Schema; other providers prompted JSON"]:::agent
 ART["Render isolated overview artifact<br/>[FUNCTION]<br/>in: original schema-validated overview<br/>out: original HTML and in-memory artifact; no DB or billing"]:::fn
 RESULT["Return overview result and trace<br/>[FUNCTION]<br/>in: artifact and observed invocation events<br/>out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
 CLEAN["Force-stop and remove scratch files<br/>[FUNCTION]<br/>in: error, cancellation or 120-second deadline<br/>out: terminated worker and preserved partial trace"]:::term
@@ -34,7 +36,10 @@ METHOD -->|"static discovery; no inference"| MAP
 MAP -->|"explicit supported run request only"| TRUST
 TRUST -->|"unsupported or mismatched"| OPAQUE
 TRUST -->|"approved overview only"| GIT --> BUNDLE --> OS --> BRIDGE
-BRIDGE -->|"model request"| LLM
+OS -->|"structured model invocation"| SHAPE --> BRIDGE
+BRIDGE -->|"model request"| SCHEMA
+SCHEMA -->|"valid or no schema"| LLM
+SCHEMA -->|"invalid or out of bounds"| CLEAN
 LLM -->|"response, never credential"| OS
 BRIDGE -->|"completed original render"| ART --> RESULT
 OS -.->|"timeout, cancellation, protocol error"| CLEAN
