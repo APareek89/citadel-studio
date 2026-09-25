@@ -8,7 +8,7 @@ ALIGN["IMPLEMENTED · Alignment and generation<br/>[AGENT · selected config.mod
 RUN["IMPLEMENTED · Manifest execution<br/>[FUNCTION]<br/>in: graph snapshot and input<br/>out: invocation events and terminal result<br/>see diagram 03"]:::fn
 REPO["IMPLEMENTED · Source acquisition and mapping<br/>[FUNCTION]<br/>in: GitHub, local checkout or folder upload<br/>out: source evidence, interpreted map or supported adapter request<br/>see diagram 04"]:::fn
 OBSERVE["IMPLEMENTED · External trace ingestion<br/>[FUNCTION]<br/>in: native span token or Langfuse project keys<br/>out: recorded external spans; never app execution<br/>see diagram 08"]:::fn
-MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/>in: 2–5 candidates, 1–20 cases or up to 6 approved probes<br/>out: runs with grouped evidence<br/>see diagram 05"]:::fn
+MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/>in: candidates, eval cases, approved source review or supported probes<br/>out: grouped run evidence or source-only findings<br/>see diagrams 05 and 10"]:::fn
 EXPORT["IMPLEMENTED · Portable project export<br/>[FUNCTION]<br/>in: supported project revision<br/>out: secret-free runnable ZIP<br/>see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway<br/>[FUNCTION]<br/>in: bounded request and credential ID<br/>out: model text and usage<br/>see diagram 02"]:::fn
 STORE["IMPLEMENTED · Local workspace and event journal<br/>[DATA · private JSON + JSONL]<br/>in: snapshots and redacted events<br/>out: restorable project and run history"]:::data
@@ -26,8 +26,8 @@ RUN --> PROVIDER
 REPO -->|"AI mapping or mediated adapter model calls"| PROVIDER
 OBSERVE --> STORE
 MODES --> RUN
-MODES -->|"source-owned campaigns"| REPO
-MODES -->|"planner or judge"| PROVIDER
+MODES -->|"supported source-owned behavioral campaigns"| REPO
+MODES -->|"planner, source reviewer or judge"| PROVIDER
 MODES --> STORE
 ALIGN --> STORE
 RUN --> STORE

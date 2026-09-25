@@ -379,12 +379,10 @@ app.post("/api/projects/:id/remap", async (req, res) => {
     priorRepo = p.repo;
   const discovered = await mapSource(priorRepo.path, b.mapping, b.config);
   if (p.graph !== priorGraph || p.repo !== priorRepo)
-    return res
-      .status(409)
-      .json({
-        error:
-          "Source changed while mapping. The newer connection was retained; refresh before trying again.",
-      });
+    return res.status(409).json({
+      error:
+        "Source changed while mapping. The newer connection was retained; refresh before trying again.",
+    });
   if (p.repo.sourceKind === "upload") {
     discovered.repo.sourceKind = "upload";
     discovered.repo.name = p.repo.name;
@@ -523,12 +521,10 @@ app.post("/api/repos/connect", async (req, res) => {
   if (b.projectId) {
     p = projectById(b.projectId);
     if (p.graph !== priorGraph || p.repo !== priorRepo)
-      return res
-        .status(409)
-        .json({
-          error:
-            "Project changed while connecting. The newer source was retained; refresh before trying again.",
-        });
+      return res.status(409).json({
+        error:
+          "Project changed while connecting. The newer source was retained; refresh before trying again.",
+      });
     if (priorRepo?.path !== discovered.repo.path) {
       disconnectReceiver(p.id);
       disconnectLangfuse(p.id);
@@ -632,17 +628,18 @@ app.post("/api/redteam/plan", async (req, res) => {
       projectId: z.string(),
       scope: z.string(),
       brandRules: z.string().max(4000),
-      maxProbes: z.number().int().min(1).max(6),
-      config: configSchema,
+      maxProbes: z.number().int().min(1).max(6).optional(),
+      config: configSchema.optional(),
+      mode: z.enum(["source-review", "behavioral"]).optional(),
     })
     .parse(req.body);
   res.json(await planRedTeam(b));
 });
-app.post("/api/redteam/:id/run", (req, res) => {
+app.post("/api/redteam/:id/run", async (req, res) => {
   const b = z
     .object({ config: configSchema, confirmed: z.literal(true) })
     .parse(req.body);
-  res.json(runRedTeam(req.params.id, b.config));
+  res.json(await runRedTeam(req.params.id, b.config));
 });
 app.get("/api/redteam/:id", (req, res) =>
   res.json(find(state.redPlans, req.params.id)),

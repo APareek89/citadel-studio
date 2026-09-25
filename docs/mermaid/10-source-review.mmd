@@ -1,0 +1,38 @@
+%% 10 IMPLEMENTED — free source plan and approved bounded review; no target execution
+flowchart TD
+INPUT["Prepare imported-source review<br/>[FUNCTION]<br/>in: connected repository or uploaded folder, graph and brand criteria<br/>out: deterministic evidence request; no key or model call"]:::fn
+READ["Collect protected source evidence<br/>[FUNCTION]<br/>in: safe discovered inventory and source references<br/>out: scrubbed numbered excerpts and whole selected-file hashes<br/>max 30 files, 60000 chars, 8000 per file, 1200 per line"]:::fn
+PRESENT{"Usable source and unchanged target?<br/>[FUNCTION]<br/>in: evidence and current graph/repo identity<br/>out: free plan or explicit preparation error"}:::dec
+PLAN["Persist proposed source plan<br/>[DATA · RedPlan review metadata]<br/>in: graph/repo fingerprint, evidence digest, ranges and counts<br/>out: inspectable coverage, zero probes and maxCalls 1<br/>no unredacted source stored in metadata"]:::data
+APPROVE{"User explicitly approves model review?<br/>[FUNCTION]<br/>in: confirmed=true and compatible credential/model<br/>out: ready request or retained proposed plan"}:::dec
+PENDING["Retain free proposed plan<br/>[FUNCTION]<br/>in: no approval or no validated model<br/>out: configure model or review coverage first"]:::ask
+RECHECK["Lock start and recollect evidence<br/>[FUNCTION]<br/>in: proposed plan and current source<br/>out: target fingerprint and evidence digest comparison<br/>completed or concurrent starts reject"]:::fn
+PIN{"Approved graph and evidence still match?<br/>[FUNCTION]<br/>in: current target, original-byte hashes and inventory<br/>out: start once or require replanning<br/>historical unpinned plans reject before inference"}:::dec
+ERROR["Reject without a model call<br/>[FUNCTION]<br/>in: absent source, stale plan, missing key or duplicate start<br/>out: actionable error; no target run"]:::term
+BUDGET["Reserve bounded review call<br/>[FUNCTION]<br/>in: approved model, known pricing and global guard<br/>out: at most 1 call, USD 0.25 reserve and 90s deadline<br/>maximum 4096 output tokens; no tools"]:::fn
+MODEL["Review supplied source hypotheses<br/>[AGENT · selected config.model]<br/>in: scrubbed excerpts and brand criteria as untrusted evidence<br/>out: strict JSON; at most 12 proposed findings"]:::agent
+SCHEMA{"Reviewer response matches strict schema?<br/>[LIBRARY · Zod]<br/>in: at most 60000 response characters and known fields<br/>out: citation checks or inconclusive result"}:::dec
+CITE["Validate every source citation<br/>[FUNCTION]<br/>in: supplied path, positive line and quote at most 500 chars<br/>out: accepted or rejected evidence<br/>quote starts on cited line; no missing/clipped-line bridges"]:::fn
+KEEP["Retain source-backed hypotheses<br/>[DATA · suspected findings]<br/>in: accepted citations, safe quote and recommendation<br/>out: suspected only; no reproduced or passed verdict"]:::data
+INCONCLUSIVE["Retain uncertainty and failure evidence<br/>[DATA · review notes and inconclusive findings]<br/>in: rejected citations, malformed response, timeout or provider error<br/>out: rejected counts or incomplete-review reason"]:::data
+RESULT["Inspect bounded review result<br/>[FUNCTION]<br/>in: coverage, model usage, hypotheses and uncertainty<br/>out: saved safe quotation and current-checkout source preview<br/>no target execution; no security clearance"]:::term
+INPUT --> READ --> PRESENT
+PRESENT -->|"source available; same target"| PLAN --> APPROVE
+PRESENT -->|"empty or changed"| ERROR
+APPROVE -->|"not ready"| PENDING
+APPROVE -->|"explicitly confirmed and model ready"| RECHECK --> PIN
+RECHECK -->|"duplicate or no longer proposed"| ERROR
+PIN -->|"matches"| BUDGET --> MODEL --> SCHEMA
+PIN -->|"changed or unpinned"| ERROR
+BUDGET -->|"unknown pricing or insufficient allowance"| INCONCLUSIVE
+MODEL -->|"failure or deadline"| INCONCLUSIVE
+SCHEMA -->|"valid"| CITE
+SCHEMA -->|"invalid"| INCONCLUSIVE
+CITE -->|"exact supplied evidence"| KEEP --> RESULT
+CITE -->|"unsupported or duplicate citation"| INCONCLUSIVE --> RESULT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;

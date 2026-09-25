@@ -3934,3 +3934,45 @@ button.source-reference-item:hover {
 .react-flow__node-section {
   pointer-events: none !important;
 }
+
+.source-review-plan,
+.source-review-summary {
+  margin-bottom: 20px;
+}
+.source-review-plan h2,
+.source-review-summary h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.review-source-list {
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 12px;
+}
+.review-source-list > div {
+  display: grid;
+  gap: 4px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.review-source-list code {
+  white-space: normal;
+}
+.review-quote {
+  margin: 14px 0;
+  padding: 14px;
+  border-left: 2px solid var(--accent);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--canvas);
+  font-size: 12px;
+}
+.finding-card .source-ref {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.finding-card .source-ref code {
+  white-space: normal;
+}

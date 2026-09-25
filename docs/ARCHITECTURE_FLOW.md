@@ -18,6 +18,12 @@ The manifest export now contains a CLI and a minimal local browser wrapper (`npm
 
 Current evidence, live-versus-mocked provider coverage, the inconclusive connected red-team probe and final UI checks are in [QA-REPORT.md](QA-REPORT.md).
 
+## Red-team capability boundary
+
+Diagram 10 adds source review for every imported repository or uploaded folder, including discovery-only apps. Preparing its coverage and evidence digest is free and needs no credential. The approved plan contains zero probes. Explicit confirmation and a validated compatible model authorize at most one review call, capped at US$0.25, 90 seconds and 4,096 output tokens. It uses protected, scrubbed source excerpts; it never starts a target run or executes repository code. Behavioral mode remains a separate finite-probe journey for executable manifests and the supported source adapter; a map or trace connection does not supply that adapter.
+
+Plans pin the graph/repository fingerprint and selected source evidence. Recollection checks current inventory and original selected-file bytes before a model call; changed targets, changed evidence, historical unpinned plans and duplicate starts reject. Strict output schema and exact supplied path/line/quote validation retain only suspected findings. Rejected citations, invalid output and incomplete calls stay inconclusive; zero findings is not a pass. The saved safe quote is historical evidence; the source inspector explicitly opens the current checkout. Eight integration fixtures and ten helper checks pass. Final full-suite and browser acceptance for this change remain separate in QA-REPORT.md.
+
 ## Graph presentation and external recorded paths
 
 Diagram 09 separates visual exploration from the authoritative graph. The browser computes coordinates and overview selection locally; it does not remap source, invoke a model or rewrite execution rules. Imported source overview reduces secondary relationships while preserving workflow nodes, original provenance and explicit feedback. All connections and executable-manifest views retain every original visible relationship. Geometry describes a readable arrangement, not execution order or parallelism.
@@ -50,6 +56,8 @@ New applications are manifest-owned; imported applications are source-owned. A r
 | Native observations | Project token; 200 spans / 1 MB per batch, 1,000 spans / 3 MB per trace; valid times and acyclic parents | `server/telemetry.ts` |
 | Langfuse import | Cloud-region allowlist or localhost; observations v2; UI window 24 hours; at most 300 observations; 12 seconds / 5 MB per response | `server/langfuse.ts` |
 | Campaigns | 2–5 comparison slots; 1–20 eval cases; at most 6 red-team probes; shared budget at most 30 calls | `server/workflows.ts` |
+| Source-review evidence | At most 30 files / 60,000 numbered characters, 8,000/file and 1,200/line; protected reads and whole-file scrubbing | `server/source-review.ts` |
+| Approved source review | Free plan; unchanged target/evidence; at most 1 call, US$0.25, 90 seconds, 4,096 output tokens; at most 12 citation-checked suspected findings | `server/workflows.ts`, `server/source-review.ts` |
 | Arbitrary code | Docker image required; no network; 128MB; 0.5 CPU; 32 PIDs; 15 seconds | `server/sandbox.ts` |
 
 These are implementation limits, not promises of exact provider billing or complete security isolation. Source restrictions, runtime behavior and UI coverage still require the journey tests in `Loop.MD`. The configured global spend ledger is a local estimate, not an account-wide provider billing limit.
@@ -67,6 +75,7 @@ These are implementation limits, not promises of exact provider billing or compl
 | Code sandbox | `07-custom-code-sandbox.mmd` | `server/sandbox.ts` |
 | External observations | `08-external-observation.mmd` | `server/telemetry.ts`, `server/langfuse.ts`, `sdk/workbench-client.mjs`, `sdk/workbench-client.py` |
 | Graph presentation | `09-graph-presentation.mmd` | `web/graph-presentation.ts`, `web/App.tsx`, `web/styles.css` |
+| Source review | `10-source-review.mmd` | `server/source-review.ts`, `server/workflows.ts`, red-team API/UI |
 
 ## Diagrams
 
@@ -83,7 +92,7 @@ ALIGN["IMPLEMENTED · Alignment and generation<br/>[AGENT · selected config.mod
 RUN["IMPLEMENTED · Manifest execution<br/>[FUNCTION]<br/>in: graph snapshot and input<br/>out: invocation events and terminal result<br/>see diagram 03"]:::fn
 REPO["IMPLEMENTED · Source acquisition and mapping<br/>[FUNCTION]<br/>in: GitHub, local checkout or folder upload<br/>out: source evidence, interpreted map or supported adapter request<br/>see diagram 04"]:::fn
 OBSERVE["IMPLEMENTED · External trace ingestion<br/>[FUNCTION]<br/>in: native span token or Langfuse project keys<br/>out: recorded external spans; never app execution<br/>see diagram 08"]:::fn
-MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/>in: 2–5 candidates, 1–20 cases or up to 6 approved probes<br/>out: runs with grouped evidence<br/>see diagram 05"]:::fn
+MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/>in: candidates, eval cases, approved source review or supported probes<br/>out: grouped run evidence or source-only findings<br/>see diagrams 05 and 10"]:::fn
 EXPORT["IMPLEMENTED · Portable project export<br/>[FUNCTION]<br/>in: supported project revision<br/>out: secret-free runnable ZIP<br/>see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway<br/>[FUNCTION]<br/>in: bounded request and credential ID<br/>out: model text and usage<br/>see diagram 02"]:::fn
 STORE["IMPLEMENTED · Local workspace and event journal<br/>[DATA · private JSON + JSONL]<br/>in: snapshots and redacted events<br/>out: restorable project and run history"]:::data
@@ -101,8 +110,8 @@ RUN --> PROVIDER
 REPO -->|"AI mapping or mediated adapter model calls"| PROVIDER
 OBSERVE --> STORE
 MODES --> RUN
-MODES -->|"source-owned campaigns"| REPO
-MODES -->|"planner or judge"| PROVIDER
+MODES -->|"supported source-owned behavioral campaigns"| REPO
+MODES -->|"planner, source reviewer or judge"| PROVIDER
 MODES --> STORE
 ALIGN --> STORE
 RUN --> STORE
@@ -263,8 +272,13 @@ ALIGN["Align the requested app<br/>[AGENT · selected config.model]<br/>in: brie
 ASK["Present open questions<br/>[FUNCTION]<br/>in: model-written questions<br/>out: user updates the brief and requests a new plan"]:::ask
 APPROVE{"User accepts the proposed graph?<br/>[FUNCTION]<br/>in: explicit Accept action<br/>out: saved revision or further alignment"}:::dec
 COMPARE["Prepare candidate slots<br/>[FUNCTION]<br/>in: one input, 2–5 configs, node/workflow strategy<br/>out: supported candidates with shared budget at most 30 calls"]:::fn
-RED["Produce bounded probe plan<br/>[AGENT · selected config.model]<br/>in: local-test or owned-staging declaration and brand rules<br/>out: at most 6 synthetic security, brand or customer probes<br/>one planning call, 2200 output tokens"]:::agent
+REDMODE{"Choose red-team capability<br/>[FUNCTION]<br/>in: imported source or executable target and selected mode<br/>out: source review or supported behavioral plan<br/>discovery-only imports default to source review"}:::dec
+SOURCEPLAN["Prepare and approve source review<br/>[FUNCTION]<br/>in: protected imported source and brand criteria<br/>out: source-only suspected or inconclusive findings<br/>free plan; approved review at most 1 call, USD 0.25, 90s<br/>see diagram 10; no target execution"]:::fn
+UNSUPPORTED["Explain unavailable behavioral runner<br/>[FUNCTION]<br/>in: unsupported imported execution request<br/>out: source-review option before any planner call"]:::term
+RED["Produce bounded behavioral plan<br/>[AGENT · selected config.model]<br/>in: supported target, local-test or owned-staging and brand rules<br/>out: at most 6 synthetic security, brand or customer probes<br/>one planning call, 2200 output tokens"]:::agent
 SCOPE{"User confirms the finite plan?<br/>[FUNCTION]<br/>in: confirmed=true and proposed campaign<br/>out: start once or retain proposed state"}:::dec
+PIN{"Approved target still matches?<br/>[FUNCTION]<br/>in: graph/repository fingerprint and current target<br/>out: accept or require new plan<br/>historical unpinned plans reject"}:::dec
+STALE["Require a new plan<br/>[FUNCTION]<br/>in: changed target or missing fingerprint<br/>out: no campaign execution"]:::term
 SOURCE["Review supported source heuristics<br/>[FUNCTION]<br/>in: inspected importer rules or manifest prompts<br/>out: suspected findings, not reproduced vulnerabilities"]:::fn
 CASES["Save evaluation suite version<br/>[FUNCTION]<br/>in: 1–20 cases, assertions and optional judge rubric<br/>out: immutable suite version and report with pinned criteria"]:::fn
 SCHEDULE["Execute each accepted work item<br/>[FUNCTION]<br/>in: pinned graph/repo, config/input and campaign budget at most 30<br/>out: independent run and invocation events<br/>manifest or supported source adapter"]:::fn
@@ -283,8 +297,13 @@ ALIGN --> APPROVE
 APPROVE -->|"accepted; run requested separately"| SCHEDULE
 APPROVE -->|"revise"| ALIGN
 COMPARE --> SCHEDULE
+REDMODE -->|"source review; connected repository required"| SOURCEPLAN --> HISTORY
+REDMODE -->|"behavioral; manifest or supported adapter"| RED
+REDMODE -->|"behavioral; unsupported import"| UNSUPPORTED
 RED --> SCOPE
-SCOPE -->|"confirmed"| SOURCE --> SCHEDULE
+SCOPE -->|"confirmed"| PIN
+PIN -->|"same approved target"| SOURCE --> SCHEDULE
+PIN -->|"changed or unpinned"| STALE
 SCOPE -->|"not confirmed"| RED
 CASES --> SCHEDULE --> KIND
 KIND -->|"comparison: retain each candidate"| HISTORY
@@ -442,6 +461,49 @@ classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
 classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 ```
 
+<!-- diagram: 10-source-review.mmd -->
+
+```mermaid
+%% 10 IMPLEMENTED — free source plan and approved bounded review; no target execution
+flowchart TD
+INPUT["Prepare imported-source review<br/>[FUNCTION]<br/>in: connected repository or uploaded folder, graph and brand criteria<br/>out: deterministic evidence request; no key or model call"]:::fn
+READ["Collect protected source evidence<br/>[FUNCTION]<br/>in: safe discovered inventory and source references<br/>out: scrubbed numbered excerpts and whole selected-file hashes<br/>max 30 files, 60000 chars, 8000 per file, 1200 per line"]:::fn
+PRESENT{"Usable source and unchanged target?<br/>[FUNCTION]<br/>in: evidence and current graph/repo identity<br/>out: free plan or explicit preparation error"}:::dec
+PLAN["Persist proposed source plan<br/>[DATA · RedPlan review metadata]<br/>in: graph/repo fingerprint, evidence digest, ranges and counts<br/>out: inspectable coverage, zero probes and maxCalls 1<br/>no unredacted source stored in metadata"]:::data
+APPROVE{"User explicitly approves model review?<br/>[FUNCTION]<br/>in: confirmed=true and compatible credential/model<br/>out: ready request or retained proposed plan"}:::dec
+PENDING["Retain free proposed plan<br/>[FUNCTION]<br/>in: no approval or no validated model<br/>out: configure model or review coverage first"]:::ask
+RECHECK["Lock start and recollect evidence<br/>[FUNCTION]<br/>in: proposed plan and current source<br/>out: target fingerprint and evidence digest comparison<br/>completed or concurrent starts reject"]:::fn
+PIN{"Approved graph and evidence still match?<br/>[FUNCTION]<br/>in: current target, original-byte hashes and inventory<br/>out: start once or require replanning<br/>historical unpinned plans reject before inference"}:::dec
+ERROR["Reject without a model call<br/>[FUNCTION]<br/>in: absent source, stale plan, missing key or duplicate start<br/>out: actionable error; no target run"]:::term
+BUDGET["Reserve bounded review call<br/>[FUNCTION]<br/>in: approved model, known pricing and global guard<br/>out: at most 1 call, USD 0.25 reserve and 90s deadline<br/>maximum 4096 output tokens; no tools"]:::fn
+MODEL["Review supplied source hypotheses<br/>[AGENT · selected config.model]<br/>in: scrubbed excerpts and brand criteria as untrusted evidence<br/>out: strict JSON; at most 12 proposed findings"]:::agent
+SCHEMA{"Reviewer response matches strict schema?<br/>[LIBRARY · Zod]<br/>in: at most 60000 response characters and known fields<br/>out: citation checks or inconclusive result"}:::dec
+CITE["Validate every source citation<br/>[FUNCTION]<br/>in: supplied path, positive line and quote at most 500 chars<br/>out: accepted or rejected evidence<br/>quote starts on cited line; no missing/clipped-line bridges"]:::fn
+KEEP["Retain source-backed hypotheses<br/>[DATA · suspected findings]<br/>in: accepted citations, safe quote and recommendation<br/>out: suspected only; no reproduced or passed verdict"]:::data
+INCONCLUSIVE["Retain uncertainty and failure evidence<br/>[DATA · review notes and inconclusive findings]<br/>in: rejected citations, malformed response, timeout or provider error<br/>out: rejected counts or incomplete-review reason"]:::data
+RESULT["Inspect bounded review result<br/>[FUNCTION]<br/>in: coverage, model usage, hypotheses and uncertainty<br/>out: saved safe quotation and current-checkout source preview<br/>no target execution; no security clearance"]:::term
+INPUT --> READ --> PRESENT
+PRESENT -->|"source available; same target"| PLAN --> APPROVE
+PRESENT -->|"empty or changed"| ERROR
+APPROVE -->|"not ready"| PENDING
+APPROVE -->|"explicitly confirmed and model ready"| RECHECK --> PIN
+RECHECK -->|"duplicate or no longer proposed"| ERROR
+PIN -->|"matches"| BUDGET --> MODEL --> SCHEMA
+PIN -->|"changed or unpinned"| ERROR
+BUDGET -->|"unknown pricing or insufficient allowance"| INCONCLUSIVE
+MODEL -->|"failure or deadline"| INCONCLUSIVE
+SCHEMA -->|"valid"| CITE
+SCHEMA -->|"invalid"| INCONCLUSIVE
+CITE -->|"exact supplied evidence"| KEEP --> RESULT
+CITE -->|"unsupported or duplicate citation"| INCONCLUSIVE --> RESULT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+```
+
 ## Regeneration and validation
 
 After editing these Mermaid fences, mirror each block into its named `.mmd` file. Then run:
@@ -451,7 +513,7 @@ node /Users/macbook/.agents/skills/power-coding/scripts/validate-mmd.mjs docs/me
 node /Users/macbook/.agents/skills/power-coding/scripts/build-html.mjs docs/mermaid docs/architecture-flow.html
 ```
 
-The original seven-diagram snapshot passed Mermaid parsing and browser rendering; the eight-diagram connection snapshot passed the real Mermaid parser. This graph milestone adds diagram 09 and updates the master. **All nine diagrams pass the real Mermaid parser**, their Markdown fences match the `.mmd` sources, and the standalone viewer was regenerated. No browser was launched for this documentation check. A successful parse alone does not establish readable layout. The viewer is a documentation artifact, not a runtime debug tab.
+The original seven-diagram snapshot passed Mermaid parsing and browser rendering; the subsequent connection and graph snapshots passed the real Mermaid parser. The red-team correction adds diagram 10 and updates the master/product-mode boundaries. **All ten diagrams pass the real Mermaid parser**, all canonical fences match their `.mmd` sources, and the standalone viewer was regenerated. No browser was launched for this documentation check. A successful parse alone does not establish readable layout. The viewer is a documentation artifact, not a runtime debug tab.
 
 ## Known boundaries
 
@@ -462,7 +524,7 @@ The original seven-diagram snapshot passed Mermaid parsing and browser rendering
 - Native tracing covers only instrumented operations and requires receiver reachability. Manual Langfuse snapshots may omit parents or older spans; imported observations never execute the source application.
 - Source overview, external Recorded path and Full source context are display scopes, not different stored applications. A missing path edge means no matching observed relationship was recorded; the UI must not invent one from node timing or source proximity.
 - The trusted imported overview disables retrieval and external persistence; full lesson generation remains discovery-only. Its macOS policy permits scoped read access plus root-directory metadata needed by the loader; network, file writes and child-process creation are denied. It is a reviewed-source adapter, not a general hostile-code sandbox.
-- Red-team specialists currently label different planned probe concerns; the source review is deterministic heuristics and semantic review uses the selected model. Separate autonomous specialist agents are not implemented.
+- Source review is a bounded selected-model inspection of source, never target execution. Exact citations establish where quoted text came from, not that the risk is exploitable or that omitted code is safe. Whole selected-file hashes detect changes beyond supplied excerpts; unselected-file content is outside that guarantee. Behavioral specialists remain labelled probe concerns, not separate autonomous agents, and retain their adapter gate.
 - Export assembly and a clean-directory CLI sample are verified for the support app. The browser wrapper has free HTTP-boundary and abort-survival coverage; interactive model-backed browser acceptance is separate. The download endpoint does not automatically enforce a readiness gate for each download.
 - AWS configuration is ready, but cloud hosting, tenant identity and a remote runner/sandbox are not built. See [AWS-READINESS.md](AWS-READINESS.md).
 - Decisions and rejected alternatives are in [DECISIONS.md](DECISIONS.md).

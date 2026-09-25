@@ -4,8 +4,13 @@ ALIGN["Align the requested app<br/>[AGENT · selected config.model]<br/>in: brie
 ASK["Present open questions<br/>[FUNCTION]<br/>in: model-written questions<br/>out: user updates the brief and requests a new plan"]:::ask
 APPROVE{"User accepts the proposed graph?<br/>[FUNCTION]<br/>in: explicit Accept action<br/>out: saved revision or further alignment"}:::dec
 COMPARE["Prepare candidate slots<br/>[FUNCTION]<br/>in: one input, 2–5 configs, node/workflow strategy<br/>out: supported candidates with shared budget at most 30 calls"]:::fn
-RED["Produce bounded probe plan<br/>[AGENT · selected config.model]<br/>in: local-test or owned-staging declaration and brand rules<br/>out: at most 6 synthetic security, brand or customer probes<br/>one planning call, 2200 output tokens"]:::agent
+REDMODE{"Choose red-team capability<br/>[FUNCTION]<br/>in: imported source or executable target and selected mode<br/>out: source review or supported behavioral plan<br/>discovery-only imports default to source review"}:::dec
+SOURCEPLAN["Prepare and approve source review<br/>[FUNCTION]<br/>in: protected imported source and brand criteria<br/>out: source-only suspected or inconclusive findings<br/>free plan; approved review at most 1 call, USD 0.25, 90s<br/>see diagram 10; no target execution"]:::fn
+UNSUPPORTED["Explain unavailable behavioral runner<br/>[FUNCTION]<br/>in: unsupported imported execution request<br/>out: source-review option before any planner call"]:::term
+RED["Produce bounded behavioral plan<br/>[AGENT · selected config.model]<br/>in: supported target, local-test or owned-staging and brand rules<br/>out: at most 6 synthetic security, brand or customer probes<br/>one planning call, 2200 output tokens"]:::agent
 SCOPE{"User confirms the finite plan?<br/>[FUNCTION]<br/>in: confirmed=true and proposed campaign<br/>out: start once or retain proposed state"}:::dec
+PIN{"Approved target still matches?<br/>[FUNCTION]<br/>in: graph/repository fingerprint and current target<br/>out: accept or require new plan<br/>historical unpinned plans reject"}:::dec
+STALE["Require a new plan<br/>[FUNCTION]<br/>in: changed target or missing fingerprint<br/>out: no campaign execution"]:::term
 SOURCE["Review supported source heuristics<br/>[FUNCTION]<br/>in: inspected importer rules or manifest prompts<br/>out: suspected findings, not reproduced vulnerabilities"]:::fn
 CASES["Save evaluation suite version<br/>[FUNCTION]<br/>in: 1–20 cases, assertions and optional judge rubric<br/>out: immutable suite version and report with pinned criteria"]:::fn
 SCHEDULE["Execute each accepted work item<br/>[FUNCTION]<br/>in: pinned graph/repo, config/input and campaign budget at most 30<br/>out: independent run and invocation events<br/>manifest or supported source adapter"]:::fn
@@ -24,8 +29,13 @@ ALIGN --> APPROVE
 APPROVE -->|"accepted; run requested separately"| SCHEDULE
 APPROVE -->|"revise"| ALIGN
 COMPARE --> SCHEDULE
+REDMODE -->|"source review; connected repository required"| SOURCEPLAN --> HISTORY
+REDMODE -->|"behavioral; manifest or supported adapter"| RED
+REDMODE -->|"behavioral; unsupported import"| UNSUPPORTED
 RED --> SCOPE
-SCOPE -->|"confirmed"| SOURCE --> SCHEDULE
+SCOPE -->|"confirmed"| PIN
+PIN -->|"same approved target"| SOURCE --> SCHEDULE
+PIN -->|"changed or unpinned"| STALE
 SCOPE -->|"not confirmed"| RED
 CASES --> SCHEDULE --> KIND
 KIND -->|"comparison: retain each candidate"| HISTORY

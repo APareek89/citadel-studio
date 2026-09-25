@@ -22,7 +22,7 @@ ALIGN["IMPLEMENTED · Alignment and generation&lt;br/&gt;[AGENT · selected conf
 RUN["IMPLEMENTED · Manifest execution&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: graph snapshot and input&lt;br/&gt;out: invocation events and terminal result&lt;br/&gt;see diagram 03"]:::fn
 REPO["IMPLEMENTED · Source acquisition and mapping&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: GitHub, local checkout or folder upload&lt;br/&gt;out: source evidence, interpreted map or supported adapter request&lt;br/&gt;see diagram 04"]:::fn
 OBSERVE["IMPLEMENTED · External trace ingestion&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: native span token or Langfuse project keys&lt;br/&gt;out: recorded external spans; never app execution&lt;br/&gt;see diagram 08"]:::fn
-MODES["IMPLEMENTED · Compare, eval and red-team coordination&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: 2–5 candidates, 1–20 cases or up to 6 approved probes&lt;br/&gt;out: runs with grouped evidence&lt;br/&gt;see diagram 05"]:::fn
+MODES["IMPLEMENTED · Compare, eval and red-team coordination&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: candidates, eval cases, approved source review or supported probes&lt;br/&gt;out: grouped run evidence or source-only findings&lt;br/&gt;see diagrams 05 and 10"]:::fn
 EXPORT["IMPLEMENTED · Portable project export&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: supported project revision&lt;br/&gt;out: secret-free runnable ZIP&lt;br/&gt;see diagram 06"]:::fn
 PROVIDER["IMPLEMENTED · Provider gateway&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: bounded request and credential ID&lt;br/&gt;out: model text and usage&lt;br/&gt;see diagram 02"]:::fn
 STORE["IMPLEMENTED · Local workspace and event journal&lt;br/&gt;[DATA · private JSON + JSONL]&lt;br/&gt;in: snapshots and redacted events&lt;br/&gt;out: restorable project and run history"]:::data
@@ -40,8 +40,8 @@ RUN --&gt; PROVIDER
 REPO --&gt;|"AI mapping or mediated adapter model calls"| PROVIDER
 OBSERVE --&gt; STORE
 MODES --&gt; RUN
-MODES --&gt;|"source-owned campaigns"| REPO
-MODES --&gt;|"planner or judge"| PROVIDER
+MODES --&gt;|"supported source-owned behavioral campaigns"| REPO
+MODES --&gt;|"planner, source reviewer or judge"| PROVIDER
 MODES --&gt; STORE
 ALIGN --&gt; STORE
 RUN --&gt; STORE
@@ -190,8 +190,13 @@ ALIGN["Align the requested app&lt;br/&gt;[AGENT · selected config.model]&lt;br/
 ASK["Present open questions&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: model-written questions&lt;br/&gt;out: user updates the brief and requests a new plan"]:::ask
 APPROVE{"User accepts the proposed graph?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: explicit Accept action&lt;br/&gt;out: saved revision or further alignment"}:::dec
 COMPARE["Prepare candidate slots&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: one input, 2–5 configs, node/workflow strategy&lt;br/&gt;out: supported candidates with shared budget at most 30 calls"]:::fn
-RED["Produce bounded probe plan&lt;br/&gt;[AGENT · selected config.model]&lt;br/&gt;in: local-test or owned-staging declaration and brand rules&lt;br/&gt;out: at most 6 synthetic security, brand or customer probes&lt;br/&gt;one planning call, 2200 output tokens"]:::agent
+REDMODE{"Choose red-team capability&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: imported source or executable target and selected mode&lt;br/&gt;out: source review or supported behavioral plan&lt;br/&gt;discovery-only imports default to source review"}:::dec
+SOURCEPLAN["Prepare and approve source review&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: protected imported source and brand criteria&lt;br/&gt;out: source-only suspected or inconclusive findings&lt;br/&gt;free plan; approved review at most 1 call, USD 0.25, 90s&lt;br/&gt;see diagram 10; no target execution"]:::fn
+UNSUPPORTED["Explain unavailable behavioral runner&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: unsupported imported execution request&lt;br/&gt;out: source-review option before any planner call"]:::term
+RED["Produce bounded behavioral plan&lt;br/&gt;[AGENT · selected config.model]&lt;br/&gt;in: supported target, local-test or owned-staging and brand rules&lt;br/&gt;out: at most 6 synthetic security, brand or customer probes&lt;br/&gt;one planning call, 2200 output tokens"]:::agent
 SCOPE{"User confirms the finite plan?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: confirmed=true and proposed campaign&lt;br/&gt;out: start once or retain proposed state"}:::dec
+PIN{"Approved target still matches?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: graph/repository fingerprint and current target&lt;br/&gt;out: accept or require new plan&lt;br/&gt;historical unpinned plans reject"}:::dec
+STALE["Require a new plan&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: changed target or missing fingerprint&lt;br/&gt;out: no campaign execution"]:::term
 SOURCE["Review supported source heuristics&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: inspected importer rules or manifest prompts&lt;br/&gt;out: suspected findings, not reproduced vulnerabilities"]:::fn
 CASES["Save evaluation suite version&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: 1–20 cases, assertions and optional judge rubric&lt;br/&gt;out: immutable suite version and report with pinned criteria"]:::fn
 SCHEDULE["Execute each accepted work item&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: pinned graph/repo, config/input and campaign budget at most 30&lt;br/&gt;out: independent run and invocation events&lt;br/&gt;manifest or supported source adapter"]:::fn
@@ -210,8 +215,13 @@ ALIGN --&gt; APPROVE
 APPROVE --&gt;|"accepted; run requested separately"| SCHEDULE
 APPROVE --&gt;|"revise"| ALIGN
 COMPARE --&gt; SCHEDULE
+REDMODE --&gt;|"source review; connected repository required"| SOURCEPLAN --&gt; HISTORY
+REDMODE --&gt;|"behavioral; manifest or supported adapter"| RED
+REDMODE --&gt;|"behavioral; unsupported import"| UNSUPPORTED
 RED --&gt; SCOPE
-SCOPE --&gt;|"confirmed"| SOURCE --&gt; SCHEDULE
+SCOPE --&gt;|"confirmed"| PIN
+PIN --&gt;|"same approved target"| SOURCE --&gt; SCHEDULE
+PIN --&gt;|"changed or unpinned"| STALE
 SCOPE --&gt;|"not confirmed"| RED
 CASES --&gt; SCHEDULE --&gt; KIND
 KIND --&gt;|"comparison: retain each candidate"| HISTORY
@@ -349,6 +359,46 @@ CANVAS --&gt; FULL
 CANVAS --&gt; SELECT --&gt; EDIT
 EDIT --&gt;|"yes; explicit edit only"| SAVE
 EDIT --&gt;|"source-owned or historical"| INSPECT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<h2>10 IMPLEMENTED — free source plan and approved bounded review; no target execution</h2>
+<pre class="mermaid">%% 10 IMPLEMENTED — free source plan and approved bounded review; no target execution
+flowchart TD
+INPUT["Prepare imported-source review&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: connected repository or uploaded folder, graph and brand criteria&lt;br/&gt;out: deterministic evidence request; no key or model call"]:::fn
+READ["Collect protected source evidence&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: safe discovered inventory and source references&lt;br/&gt;out: scrubbed numbered excerpts and whole selected-file hashes&lt;br/&gt;max 30 files, 60000 chars, 8000 per file, 1200 per line"]:::fn
+PRESENT{"Usable source and unchanged target?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: evidence and current graph/repo identity&lt;br/&gt;out: free plan or explicit preparation error"}:::dec
+PLAN["Persist proposed source plan&lt;br/&gt;[DATA · RedPlan review metadata]&lt;br/&gt;in: graph/repo fingerprint, evidence digest, ranges and counts&lt;br/&gt;out: inspectable coverage, zero probes and maxCalls 1&lt;br/&gt;no unredacted source stored in metadata"]:::data
+APPROVE{"User explicitly approves model review?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: confirmed=true and compatible credential/model&lt;br/&gt;out: ready request or retained proposed plan"}:::dec
+PENDING["Retain free proposed plan&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: no approval or no validated model&lt;br/&gt;out: configure model or review coverage first"]:::ask
+RECHECK["Lock start and recollect evidence&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: proposed plan and current source&lt;br/&gt;out: target fingerprint and evidence digest comparison&lt;br/&gt;completed or concurrent starts reject"]:::fn
+PIN{"Approved graph and evidence still match?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: current target, original-byte hashes and inventory&lt;br/&gt;out: start once or require replanning&lt;br/&gt;historical unpinned plans reject before inference"}:::dec
+ERROR["Reject without a model call&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: absent source, stale plan, missing key or duplicate start&lt;br/&gt;out: actionable error; no target run"]:::term
+BUDGET["Reserve bounded review call&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: approved model, known pricing and global guard&lt;br/&gt;out: at most 1 call, USD 0.25 reserve and 90s deadline&lt;br/&gt;maximum 4096 output tokens; no tools"]:::fn
+MODEL["Review supplied source hypotheses&lt;br/&gt;[AGENT · selected config.model]&lt;br/&gt;in: scrubbed excerpts and brand criteria as untrusted evidence&lt;br/&gt;out: strict JSON; at most 12 proposed findings"]:::agent
+SCHEMA{"Reviewer response matches strict schema?&lt;br/&gt;[LIBRARY · Zod]&lt;br/&gt;in: at most 60000 response characters and known fields&lt;br/&gt;out: citation checks or inconclusive result"}:::dec
+CITE["Validate every source citation&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: supplied path, positive line and quote at most 500 chars&lt;br/&gt;out: accepted or rejected evidence&lt;br/&gt;quote starts on cited line; no missing/clipped-line bridges"]:::fn
+KEEP["Retain source-backed hypotheses&lt;br/&gt;[DATA · suspected findings]&lt;br/&gt;in: accepted citations, safe quote and recommendation&lt;br/&gt;out: suspected only; no reproduced or passed verdict"]:::data
+INCONCLUSIVE["Retain uncertainty and failure evidence&lt;br/&gt;[DATA · review notes and inconclusive findings]&lt;br/&gt;in: rejected citations, malformed response, timeout or provider error&lt;br/&gt;out: rejected counts or incomplete-review reason"]:::data
+RESULT["Inspect bounded review result&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: coverage, model usage, hypotheses and uncertainty&lt;br/&gt;out: saved safe quotation and current-checkout source preview&lt;br/&gt;no target execution; no security clearance"]:::term
+INPUT --&gt; READ --&gt; PRESENT
+PRESENT --&gt;|"source available; same target"| PLAN --&gt; APPROVE
+PRESENT --&gt;|"empty or changed"| ERROR
+APPROVE --&gt;|"not ready"| PENDING
+APPROVE --&gt;|"explicitly confirmed and model ready"| RECHECK --&gt; PIN
+RECHECK --&gt;|"duplicate or no longer proposed"| ERROR
+PIN --&gt;|"matches"| BUDGET --&gt; MODEL --&gt; SCHEMA
+PIN --&gt;|"changed or unpinned"| ERROR
+BUDGET --&gt;|"unknown pricing or insufficient allowance"| INCONCLUSIVE
+MODEL --&gt;|"failure or deadline"| INCONCLUSIVE
+SCHEMA --&gt;|"valid"| CITE
+SCHEMA --&gt;|"invalid"| INCONCLUSIVE
+CITE --&gt;|"exact supplied evidence"| KEEP --&gt; RESULT
+CITE --&gt;|"unsupported or duplicate citation"| INCONCLUSIVE --&gt; RESULT
 classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
 classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
 classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;

@@ -260,6 +260,30 @@ export interface EvalReport {
   }[];
 }
 export interface RedPlan {
+  /** Missing on historical records, which used behavioral execution. */
+  mode?: "source-review" | "behavioral";
+  targetFingerprint?: string;
+  targetName?: string;
+  graphRevision?: number;
+  review?: {
+    digest: string;
+    files: number;
+    inventoryFiles: number;
+    characters: number;
+    truncated: boolean;
+    notes: string[];
+    sources: {
+      path: string;
+      hash: string;
+      ranges: { start: number; end: number }[];
+    }[];
+    maxCalls: number;
+    maxCostUsd: number;
+    summary?: string;
+    rejectedFindings?: number;
+    model?: string;
+    usage?: Usage;
+  };
   id: string;
   projectId: string;
   target: "manifest" | "import";
@@ -285,5 +309,8 @@ export interface RedPlan {
     nodeId?: string;
     source?: SourceRef;
     input?: string;
+    category?: "security" | "brand" | "customer-experience";
+    quote?: string;
+    recommendation?: string;
   }[];
 }

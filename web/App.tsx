@@ -555,6 +555,9 @@ export default function App() {
     [langfuseUrl, setLangfuseUrl] = useState("https://cloud.langfuse.com"),
     [langfusePublicKey, setLangfusePublicKey] = useState(""),
     [langfuseSecretKey, setLangfuseSecretKey] = useState("");
+  const [redMethod, setRedMethod] = useState<"source-review" | "behavioral">(
+    "behavioral",
+  );
   const [redScope, setRedScope] = useState("local-test"),
     [brandRules, setBrandRules] = useState(
       "Be clear, accurate and respectful. State uncertainty. Never claim a tool action succeeded without evidence.",
@@ -589,7 +592,9 @@ export default function App() {
   const project = data.projects.find((p) => p.id === projectId),
     activeMode = MODES.find((m) => m.id === mode)!;
   const run = data.runs.find((r) => r.id === runId),
-    red = data.redPlans.find((r) => r.id === redId),
+    red = data.redPlans.find(
+      (r) => r.id === redId && r.projectId === projectId,
+    ),
     comparison = data.comparisons.find((c) => c.id === comparisonId),
     report = data.reports.find((r) => r.id === reportId);
   const projectRuns = data.runs.filter((r) => r.projectId === projectId),
@@ -679,6 +684,12 @@ export default function App() {
     setSuiteId("");
     setReportId("");
     setRedId("");
+    setConfirmed(false);
+    setRedMethod(
+      project.repo?.adapter === "discovery-only"
+        ? "source-review"
+        : "behavioral",
+    );
     setComparisonId("");
     if (project.repo) {
       setMode("connect");
@@ -3824,6 +3835,17 @@ await trace.run(() => trace.span(
   }
   function RedTeam() {
     const plans = data.redPlans.filter((p) => p.projectId === projectId);
+    const behaviorAvailable =
+      !isImported || project?.repo?.adapter === "learning-studio";
+    const sourceMode =
+      isImported && (!behaviorAvailable || redMethod === "source-review");
+    const sourcePlan = red?.mode === "source-review";
+    const reviewerReady =
+      !!config.model &&
+      data.credentials.some(
+        (credential) =>
+          credential.id === config.credentialId && credential.valid,
+      );
     return (
       <div className="page-content">
         <div className="page-intro horizontal">
@@ -3833,26 +3855,35 @@ await trace.run(() => trace.span(
               {step === "Scope"
                 ? "Test the boundaries."
                 : step === "Test Plan"
-                  ? "Review the probes."
+                  ? sourcePlan
+                    ? "Review the source plan."
+                    : "Review the probes."
                   : step === "Run"
                     ? "A controlled examination."
                     : "Findings with evidence."}
             </h1>
             <p>
-              Bounded source review and behavioral testing against your local
-              application.
+              Review source for security, brand and customer risks. Run
+              behavioral probes where an isolated execution adapter is
+              available.
             </p>
           </div>
           {plans.length > 0 && (
             <select
               aria-label="Red team plan"
               value={redId}
-              onChange={(e) => setRedId(e.target.value)}
+              onChange={(e) => {
+                setRedId(e.target.value);
+                setConfirmed(false);
+              }}
             >
               <option value="">Select a plan</option>
               {plans.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {fmtDate(p.createdAt)} · {p.status} · {p.probes.length} probes
+                  {fmtDate(p.createdAt)} · {p.status} ·{" "}
+                  {p.mode === "source-review"
+                    ? "source review"
+                    : `${p.probes.length} probes`}
                 </option>
               ))}
             </select>
@@ -3861,6 +3892,40 @@ await trace.run(() => trace.span(
         {step === "Scope" ? (
           <div className="two-column">
             <section className="card">
+              <Field label="Review method">
+                <select
+                  aria-label="Review method"
+                  value={sourceMode ? "source-review" : "behavioral"}
+                  onChange={(e) => {
+                    setRedMethod(
+                      e.target.value as "source-review" | "behavioral",
+                    );
+                    setConfirmed(false);
+                  }}
+                >
+                  <option value="source-review" disabled={!isImported}>
+                    Source review · no target execution
+                  </option>
+                  <option value="behavioral" disabled={!behaviorAvailable}>
+                    Behavioral probes
+                    {!behaviorAvailable ? " · runner unavailable" : ""}
+                  </option>
+                </select>
+              </Field>
+              {isImported && (
+                <div className="callout small" role="status">
+                  <strong>
+                    {behaviorAvailable
+                      ? "Source review and scoped behavioral testing are available."
+                      : "Source review is available for this repository."}
+                  </strong>
+                  <p>
+                    {behaviorAvailable
+                      ? "Behavioral coverage is limited to the inspected Learning Studio overview adapter."
+                      : "This app has a source map but no supported execution runner. Live traces let you observe runs; they do not enable behavioral probes. Source review can inspect its code now."}
+                  </p>
+                </div>
+              )}
               <Field
                 label="Permitted target scope"
                 hint="Use isolated test identities and storage, with billing disabled."
@@ -3882,31 +3947,45 @@ await trace.run(() => trace.span(
                   onChange={(e) => setBrandRules(e.target.value)}
                 />
               </Field>
-              <Field label="Maximum behavioral probes">
-                <input
-                  type="number"
-                  min={1}
-                  max={6}
-                  value={maxProbes}
-                  onChange={(e) =>
-                    setMaxProbes(
-                      Math.max(1, Math.min(6, Number(e.target.value))),
-                    )
-                  }
-                />
-              </Field>
+              {!sourceMode && (
+                <Field label="Maximum behavioral probes">
+                  <input
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={maxProbes}
+                    onChange={(e) =>
+                      setMaxProbes(
+                        Math.max(1, Math.min(6, Number(e.target.value))),
+                      )
+                    }
+                  />
+                </Field>
+              )}
+              {sourceMode && (
+                <p className="muted small">
+                  Preparing the plan is free. After approval, one capped model
+                  call reviews redacted source excerpts. The connected app is
+                  not executed.
+                </p>
+              )}
               <button
                 className="button primary"
-                disabled={!!busy}
+                disabled={!!busy || !project}
                 onClick={() =>
                   act("Preparing test plan", async () => {
-                    requireConfig();
+                    if (dirty)
+                      throw new Error(
+                        "Save your draft before preparing a test plan.",
+                      );
+                    if (!sourceMode) requireConfig();
                     const p = await api<RedPlan>("/redteam/plan", "POST", {
                       projectId,
                       scope: redScope,
                       brandRules,
-                      maxProbes,
-                      config,
+                      maxProbes: sourceMode ? undefined : maxProbes,
+                      config: sourceMode ? undefined : config,
+                      mode: sourceMode ? "source-review" : "behavioral",
                     });
                     setData((d) => ({
                       ...d,
@@ -3918,16 +3997,21 @@ await trace.run(() => trace.span(
                   })
                 }
               >
-                Propose test plan <ArrowRight size={15} />
+                {sourceMode ? "Prepare source review" : "Propose test plan"}{" "}
+                <ArrowRight size={15} />
               </button>
             </section>
             <section className="card calm">
               <ShieldCheck size={26} />
-              <h2>A test plan before a test run.</h2>
+              <h2>
+                {sourceMode
+                  ? "Review code, with evidence."
+                  : "A test plan before a test run."}
+              </h2>
               <p>
-                Specialists examine security, injection resistance, brand
-                behavior and user experience. You review the actual probes
-                before they execute.
+                {sourceMode
+                  ? "The reviewer checks source excerpts for security weaknesses, prompt and policy gaps, brand risks and customer failure paths. Every accepted finding includes a verified source quotation and a suggested correction."
+                  : "A planning agent proposes security, brand and customer probes. Review their inputs before the supported target executes."}
               </p>
               <ul className="check-list">
                 <li>
@@ -3936,7 +4020,9 @@ await trace.run(() => trace.span(
                 </li>
                 <li>
                   <Check size={14} />
-                  Synthetic inputs and bounded calls
+                  {sourceMode
+                    ? "Bounded, redacted source excerpts"
+                    : "Synthetic inputs and bounded calls"}
                 </li>
                 <li>
                   <Check size={14} />
@@ -3944,7 +4030,9 @@ await trace.run(() => trace.span(
                 </li>
                 <li>
                   <Check size={14} />
-                  Preserved inputs, outputs and trace evidence
+                  {sourceMode
+                    ? "Verified file and line citations"
+                    : "Preserved inputs, outputs and trace evidence"}
                 </li>
               </ul>
               <div className="callout small">
@@ -3971,11 +4059,15 @@ await trace.run(() => trace.span(
             <div className="summary-strip">
               <div>
                 <span>Target</span>
-                <strong>{project?.name}</strong>
+                <strong>{red.targetName || project?.name}</strong>
               </div>
               <div>
-                <span>Probe cap</span>
-                <strong>{red.maxProbes}</strong>
+                <span>{sourcePlan ? "Source excerpts" : "Probe cap"}</span>
+                <strong>
+                  {sourcePlan
+                    ? `${red.review?.files || 0} files`
+                    : red.maxProbes}
+                </strong>
               </div>
               <div>
                 <span>Status</span>
@@ -3984,12 +4076,79 @@ await trace.run(() => trace.span(
               <div>
                 <span>Scope</span>
                 <strong>
-                  {red.target === "import"
-                    ? "Connected application"
-                    : "Manifest application"}
+                  {sourcePlan
+                    ? "Source review only"
+                    : red.target === "import"
+                      ? "Connected application"
+                      : "Manifest application"}
                 </strong>
               </div>
             </div>
+            {sourcePlan && red.review && (
+              <section className="card source-review-plan">
+                <div className="row spread">
+                  <h2>Review the source scope.</h2>
+                  <span className="badge">Graph r{red.graphRevision}</span>
+                </div>
+                <p>
+                  {red.review.files} files selected from a bounded inventory of{" "}
+                  {red.review.inventoryFiles}.{" "}
+                  {red.review.characters.toLocaleString()} characters of
+                  redacted source. This is an excerpt review, not a complete
+                  audit.
+                </p>
+                <div className="probe-grid">
+                  {[
+                    [
+                      "Security",
+                      "Prompt injection boundaries, authorization, tool execution and sensitive data.",
+                    ],
+                    [
+                      "Brand",
+                      "Instructions and checks for your stated brand and behavior rules.",
+                    ],
+                    [
+                      "Customer experience",
+                      "Missing validation, unsupported claims and failure or fallback handling.",
+                    ],
+                  ].map(([title, description]) => (
+                    <div key={title}>
+                      <strong>{title}</strong>
+                      <p className="muted small">{description}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="muted small">
+                  One model review · up to US${red.review.maxCostUsd.toFixed(2)}{" "}
+                  · 90-second deadline · no target app execution.
+                </p>
+                <details>
+                  <summary>Included files and line ranges</summary>
+                  <div className="review-source-list">
+                    {red.review.sources.map((source) => (
+                      <div key={source.path}>
+                        <code>{source.path}</code>
+                        <span className="muted small">
+                          {source.ranges
+                            .map((range) => `${range.start}–${range.end}`)
+                            .join(", ")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+                {red.review.notes.length > 0 && (
+                  <details>
+                    <summary>Coverage limits</summary>
+                    <ul>
+                      {red.review.notes.map((note, i) => (
+                        <li key={i}>{note}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </section>
+            )}
             <div className="probe-grid">
               {red.probes.map((p, i) => (
                 <section className="card" key={p.id}>
@@ -4012,8 +4171,22 @@ await trace.run(() => trace.span(
                     ? "Test evidence is ready"
                     : red.status === "running"
                       ? "Testing in progress"
-                      : "Ready to run these probes?"}
+                      : sourcePlan
+                        ? "Ready to review these source excerpts?"
+                        : "Ready to run these probes?"}
                 </h3>
+                {red.status === "proposed" && !reviewerReady && (
+                  <p className="muted small">
+                    Choose a validated credential and compatible model before
+                    running.{" "}
+                    <button
+                      className="text-button"
+                      onClick={() => setCredentialModal(true)}
+                    >
+                      Configure review model
+                    </button>
+                  </p>
+                )}
                 {red.status === "proposed" && (
                   <label className="checkbox">
                     <input
@@ -4021,14 +4194,16 @@ await trace.run(() => trace.span(
                       checked={confirmed}
                       onChange={(e) => setConfirmed(e.target.checked)}
                     />
-                    I approve this finite plan against my isolated local/test
-                    application.
+                    {sourcePlan
+                      ? "I approve this source review using the selected workbench model. My app will not be executed."
+                      : "I approve this finite plan against my isolated local/test application."}
                   </label>
                 )}
                 {red.status === "running" && (
                   <p className="muted">
-                    Results appear as probes finish. You can inspect the
-                    underlying runs.
+                    {sourcePlan
+                      ? "Reviewing the approved excerpts. Source citations are checked before findings appear."
+                      : "Results appear as probes finish. You can inspect the underlying runs."}
                   </p>
                 )}
               </div>
@@ -4042,7 +4217,12 @@ await trace.run(() => trace.span(
               ) : (
                 <button
                   className="button primary"
-                  disabled={!!busy || !confirmed || red.status === "running"}
+                  disabled={
+                    !!busy ||
+                    !confirmed ||
+                    !reviewerReady ||
+                    red.status === "running"
+                  }
                   onClick={() =>
                     act("Starting red team", async () => {
                       const p = await api<RedPlan>(
@@ -4067,7 +4247,7 @@ await trace.run(() => trace.span(
                   ) : (
                     <Play size={15} />
                   )}{" "}
-                  Run approved plan
+                  {sourcePlan ? "Run source review" : "Run approved plan"}
                 </button>
               )}
             </div>
@@ -4080,6 +4260,47 @@ await trace.run(() => trace.span(
                   ? "Testing is still in progress. Findings may be partial."
                   : "This plan has not been executed yet."}
               </div>
+            )}
+            {sourcePlan && red.review && (
+              <section className="card source-review-summary">
+                <div className="row spread">
+                  <h2>Source review</h2>
+                  <span className="badge">No behavioral probes</span>
+                </div>
+                <p>
+                  {red.review.summary ||
+                    (red.status === "running"
+                      ? "Review in progress…"
+                      : red.status === "completed"
+                        ? "Review ended. Check the findings and any incomplete evidence below."
+                        : "Approve and run the review to receive findings.")}
+                </p>
+                <p className="muted small">
+                  {red.targetName || project?.name} · Graph r{red.graphRevision}{" "}
+                  · {red.review.files} files in scope /{" "}
+                  {red.review.inventoryFiles} inventoried ·{" "}
+                  {red.review.model || "Model selected at run time"}
+                  {red.review.usage?.estimatedCostUsd !== undefined
+                    ? ` · estimated US$${red.review.usage.estimatedCostUsd.toFixed(4)}`
+                    : ""}
+                </p>
+                <div className="callout small">
+                  These are source-based suspicions, not reproduced
+                  vulnerabilities. Citation checks confirm the quoted source,
+                  not the diagnosis. Unreviewed code and runtime behavior remain
+                  unassessed.
+                </div>
+                {red.review.notes.length > 0 && (
+                  <details>
+                    <summary>Coverage and validation notes</summary>
+                    <ul>
+                      {red.review.notes.map((note, i) => (
+                        <li key={i}>{note}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </section>
             )}
             {red.findings.length ? (
               <div className="findings-list">
@@ -4094,12 +4315,32 @@ await trace.run(() => trace.span(
                     <h3>{f.title}</h3>
                     <p>{f.description}</p>
                     {f.source && (
-                      <div className="source-ref">
+                      <button
+                        className="button small source-ref"
+                        onClick={() => inspectSource(f.source!)}
+                        aria-label={`Inspect current source ${f.source.path}:${f.source.line}`}
+                        title="Open the current source file. The quotation below is the evidence saved with this review."
+                      >
                         <FileCode2 size={14} />
                         <code>
                           {f.source.path}:{f.source.line}
                         </code>
-                      </div>
+                      </button>
+                    )}
+                    {f.quote && (
+                      <>
+                        <p className="muted small">
+                          Quoted evidence saved with this review; the source
+                          viewer opens the current file.
+                        </p>
+                        <pre className="review-quote">{f.quote}</pre>
+                      </>
+                    )}
+                    {f.recommendation && (
+                      <p>
+                        <strong>Suggested correction:</strong>{" "}
+                        {f.recommendation}
+                      </p>
                     )}
                     {f.input && (
                       <details>
@@ -4146,8 +4387,9 @@ await trace.run(() => trace.span(
                     : "No findings yet"
                 }
               >
-                A completed probe plan and its evidence will appear here. An
-                empty report is not proof of complete safety.
+                {sourcePlan
+                  ? "No supported finding was returned for these excerpts. This does not establish that the application is safe."
+                  : "A completed probe plan and its evidence will appear here. An empty report is not proof of complete safety."}
               </Empty>
             )}
           </>

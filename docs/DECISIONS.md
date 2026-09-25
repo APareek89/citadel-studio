@@ -94,13 +94,13 @@
 
 ## 10 — Red-team findings and evaluation verdicts retain provenance
 
-**Chosen:** a master plan produces a finite, reviewed probe set for a declared owned local/test target. Findings distinguish reproduced behavior, source-only suspicion and inconclusive results. Evals retain case, rubric, graph/model and source-run versions; infrastructure errors stay separate from quality failures.
+**Chosen:** Red Team separates source review from behavioral tests. Every connected repository or uploaded folder can prepare a free, bounded source plan; discovery-only imports default to it. Explicit approval and a compatible model start one source-review call, capped at US$0.25, 90 seconds and 4,096 output tokens, without executing the target. Behavioral tests require an executable manifest or the supported source adapter and retain their finite, approved probe plan. Findings distinguish reproduced behavior, source-only suspicion and inconclusive results. Evals retain case, rubric, graph/model and source-run versions; infrastructure errors stay separate from quality failures.
 
 **Reason:** the product should help users repair an issue and test that repair, without turning a plausible model statement into a claimed vulnerability or a transport error into a failed answer.
 
-**Rejected:** unrestricted autonomous probing, production side effects, hidden model-judge criteria or silent baseline replacement.
+**Rejected:** unrestricted autonomous probing, production side effects, treating a source map or trace connection as an execution adapter, generating paid probes for an unsupported target, hidden model-judge criteria or silent baseline replacement.
 
-**Consequence:** the current planner labels security, brand and customer probes; it does not spawn separate autonomous specialist agents. Source review uses bounded heuristics, while semantic judgment uses the selected model. Promotion from trace/finding to eval creates a draft expectation for review. A model judge remains fallible; deterministic checks are preferred when the expectation can be expressed precisely.
+**Consequence:** source review reads protected, scrubbed excerpts from at most 30 files / 60,000 numbered characters and labels every accepted finding suspected. A strict response schema and exact quote beginning on the cited supplied line are required; omitted or clipped lines cannot be bridged. Rejected citations and model failures produce inconclusive evidence, never a pass or reproduced vulnerability. Approved graph/repository identity and source-evidence digest are rechecked before dispatch; old unpinned plans must be prepared again. Source lookup opens the current checkout, not a historical file snapshot; the saved safe quote remains the finding's evidence. The behavioral planner labels security, brand and customer concerns but does not spawn autonomous specialist agents. Promotion to eval drafts criteria for user review and does not create an unsupported target runner. Model reasoning remains fallible even when its citation is genuine.
 
 ## 11 — Launch initially means a portable project download
 

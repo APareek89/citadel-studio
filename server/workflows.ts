@@ -1,3 +1,9 @@
+import { createHash } from "node:crypto";
+import {
+  collectReviewEvidence,
+  reviewSources,
+  type ReviewEvidence,
+} from "./source-review.js";
 import { runInNewContext } from "node:vm";
 import type {
   Alignment,
@@ -8,11 +14,12 @@ import type {
   EvalCase,
   RedPlan,
   Graph,
+  Project,
 } from "../shared/types.js";
 import { id, now, state, save, projectById } from "./store.js";
 import { defaultGraph, validateGraph } from "./graph.js";
 import { boundedGenerator, makeBudget, startRun, waitRun } from "./runs.js";
-import { redact, safeObject } from "./providers.js";
+import { redact, safeObject, modelFor } from "./providers.js";
 function json(text: string) {
   return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
 }
@@ -405,23 +412,106 @@ export function evaluate(
   })();
   return report;
 }
+function redTargetFingerprint(project: Project) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        projectId: project.id,
+        graph: project.graph,
+        repo: project.repo || null,
+      }),
+    )
+    .digest("hex");
+}
+function assertRedTarget(plan: RedPlan, project: Project) {
+  if (
+    !plan.targetFingerprint ||
+    plan.targetFingerprint !== redTargetFingerprint(project)
+  )
+    throw new Error(
+      "The target changed or this older plan is not pinned. Prepare a new test plan before running.",
+    );
+}
 export async function planRedTeam(args: {
   projectId: string;
   scope: string;
   brandRules: string;
-  maxProbes: number;
-  config: ModelConfig;
+  maxProbes?: number;
+  config?: ModelConfig;
+  mode?: "source-review" | "behavioral";
 }): Promise<RedPlan> {
   const p = projectById(args.projectId);
   if (args.scope !== "local-test" && args.scope !== "owned-staging")
     throw new Error(
       "Choose local-test or owned-staging scope. Production targets are excluded.",
     );
-  if (p.repo?.adapter === "discovery-only")
-    throw new Error(
-      "Behavioral red teaming needs a supported isolated adapter. Source mapping alone cannot run probes.",
+  const mode =
+    args.mode ||
+    (p.repo?.adapter === "discovery-only" ? "source-review" : "behavioral");
+  if (mode !== "source-review" && mode !== "behavioral")
+    throw new Error("Unsupported review mode.");
+  const targetFingerprint = redTargetFingerprint(p);
+  const targetName = p.name;
+  const graphRevision = p.graph.revision;
+  if (mode === "source-review") {
+    if (!p.repo)
+      throw new Error(
+        "Source review requires a connected repository or uploaded folder.",
+      );
+    const evidence = await collectReviewEvidence(
+      structuredClone(p.graph),
+      structuredClone(p.repo),
     );
-  const maxProbes = Math.min(6, Math.max(1, Math.floor(args.maxProbes)));
+    if (!evidence.sources.length)
+      throw new Error(
+        "No readable source evidence is available. Reconnect the repository or upload a supported source folder.",
+      );
+    if (targetFingerprint !== redTargetFingerprint(projectById(p.id)))
+      throw new Error(
+        "The target changed while preparing the review. Prepare a new plan.",
+      );
+    const plan: RedPlan = safeObject({
+      id: id("red"),
+      projectId: p.id,
+      target: "import",
+      mode,
+      targetFingerprint,
+      targetName,
+      graphRevision,
+      scope: args.scope,
+      brandRules: args.brandRules,
+      maxProbes: 0,
+      createdAt: now(),
+      status: "proposed",
+      probes: [],
+      findings: [],
+      review: {
+        digest: evidence.digest,
+        files: evidence.sources.length,
+        inventoryFiles: evidence.counts.inventoryFiles,
+        characters: evidence.counts.sourceChars,
+        truncated: evidence.truncated,
+        notes: evidence.notes,
+        sources: evidence.sources.map((source) => ({
+          path: source.path,
+          hash: source.hash,
+          ranges: source.ranges,
+        })),
+        maxCalls: 1,
+        maxCostUsd: 0.25,
+      },
+    });
+    state.redPlans.unshift(plan);
+    save();
+    return plan;
+  }
+  if (p.repo && p.repo.adapter !== "learning-studio")
+    throw new Error(
+      "Behavioral tests are unavailable for this application. Choose Source review to inspect its code; mapping and trace connections do not provide an execution runner.",
+    );
+  if (!args.config)
+    throw new Error("Choose a validated model for behavioral planning.");
+  const maxProbes = Math.min(6, Math.max(1, Math.floor(args.maxProbes || 3)));
   const planner = boundedGenerator(
     args.config,
     makeBudget(1),
@@ -446,39 +536,124 @@ export async function planRedTeam(args: {
     id: id("red"),
     projectId: p.id,
     target: p.repo ? "import" : "manifest",
+    mode,
+    targetFingerprint,
+    targetName,
+    graphRevision,
     scope: args.scope,
     brandRules: args.brandRules,
     maxProbes,
     createdAt: now(),
     status: "proposed",
-    probes: data.probes
-      .slice(0, maxProbes)
-      .map((probe: any) => ({
-        id: id("probe"),
-        specialist: String(probe.specialist),
-        input: String(probe.input).slice(0, 4000),
-        forbidden: String(probe.forbidden || "").slice(0, 200),
-        description: String(probe.description).slice(0, 2000),
-      })),
+    probes: data.probes.slice(0, maxProbes).map((probe: any) => ({
+      id: id("probe"),
+      specialist: String(probe.specialist),
+      input: String(probe.input).slice(0, 4000),
+      forbidden: String(probe.forbidden || "").slice(0, 200),
+      description: String(probe.description).slice(0, 2000),
+    })),
     findings: [],
   });
+  if (targetFingerprint !== redTargetFingerprint(projectById(p.id)))
+    throw new Error("The target changed while planning. Prepare a new plan.");
   state.redPlans.unshift(plan);
   save();
   return plan;
 }
-export function runRedTeam(planId: string, config: ModelConfig): RedPlan {
+const redStarts = new Set<string>();
+export async function runRedTeam(
+  planId: string,
+  config: ModelConfig,
+): Promise<RedPlan> {
   const plan = state.redPlans.find((p) => p.id === planId);
   if (!plan) throw new Error("Campaign not found");
-  if (plan.status !== "proposed")
+  if (plan.status !== "proposed" || redStarts.has(planId))
     throw new Error("Campaign already started. Create a new plan to retest.");
   const p = projectById(plan.projectId);
+  assertRedTarget(plan, p);
+  const mode = plan.mode || "behavioral";
+  if (mode === "behavioral" && p.repo && p.repo.adapter !== "learning-studio")
+    throw new Error(
+      "Behavioral tests are unavailable. Prepare a Source review plan instead.",
+    );
+  if (!config)
+    throw new Error("Choose a validated model before running the review.");
+  modelFor(config);
   const snapshot = structuredClone(p.graph);
   const repoSnapshot = p.repo ? structuredClone(p.repo) : null;
-  plan.status = "running";
-  save();
-  const budget = makeBudget(30);
+  let sourceEvidence: ReviewEvidence | undefined;
+  redStarts.add(planId);
+  try {
+    if (mode === "source-review") {
+      if (!repoSnapshot || !plan.review)
+        throw new Error(
+          "Source review metadata is missing. Prepare a new plan.",
+        );
+      sourceEvidence = await collectReviewEvidence(snapshot, repoSnapshot);
+      if (sourceEvidence.digest !== plan.review.digest)
+        throw new Error(
+          "The source changed since this plan was prepared. Prepare a new review plan.",
+        );
+    }
+    assertRedTarget(plan, projectById(plan.projectId));
+    if (plan.status !== "proposed")
+      throw new Error("Campaign already started. Create a new plan to retest.");
+    plan.status = "running";
+    save();
+  } finally {
+    redStarts.delete(planId);
+  }
+  const budget = makeBudget(
+    mode === "source-review" ? 1 : 30,
+    mode === "source-review" ? 0.25 : undefined,
+  );
   void (async () => {
     try {
+      if (mode === "source-review") {
+        const generate = boundedGenerator(
+          config,
+          budget,
+          AbortSignal.timeout(90000),
+          4096,
+        );
+        plan.review!.model = config.model;
+        const result = await reviewSources(
+          sourceEvidence!,
+          plan.brandRules,
+          async (...args) => {
+            const response = await generate(...args);
+            plan.review!.usage = response.usage;
+            return response;
+          },
+        );
+        plan.review!.summary = redact(result.summary);
+        plan.review!.rejectedFindings = result.rejectedFindings;
+        plan.review!.notes.push(...result.validationNotes.map(redact));
+        plan.findings.push(
+          ...result.findings.map((finding) => {
+            const node = snapshot.nodes.find((n) =>
+              [n.source, ...(n.sourceRefs || [])].some(
+                (source) => source?.path === finding.source.path,
+              ),
+            );
+            return safeObject({
+              ...finding,
+              id: id("finding"),
+              nodeId: node?.id,
+              evidenceType: "suspected" as const,
+            });
+          }),
+        );
+        if (result.rejectedFindings)
+          plan.findings.push({
+            id: id("finding"),
+            title: "Some proposed findings could not be verified",
+            severity: "low",
+            evidenceType: "inconclusive",
+            description: `${result.rejectedFindings} model finding(s) failed source-citation validation and were excluded. Review coverage is incomplete.`,
+          });
+        return;
+      }
       if (repoSnapshot) {
         const { staticFindings } = await import("./importer.js");
         if (staticFindings)
