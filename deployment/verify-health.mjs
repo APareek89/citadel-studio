@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { request } from "node:http";
 const env = Object.fromEntries(
   readFileSync("/etc/agent-workbench/app.env", "utf8")
     .split(/\r?\n/)
@@ -12,15 +13,40 @@ const host = new URL(env.WORKBENCH_PUBLIC_ORIGIN).host;
 let ready = false;
 for (let attempt = 0; attempt < 20; attempt++) {
   try {
-    const response = await fetch("http://127.0.0.1:3001/api/health", {
-      headers: {
-        Host: host,
-        "X-Workbench-Proxy-Token": env.WORKBENCH_PROXY_TOKEN,
-      },
-      signal: AbortSignal.timeout(1000),
+    const health = await new Promise((resolve, reject) => {
+      const req = request(
+        "http://127.0.0.1:3001/api/health",
+        {
+          headers: {
+            Host: host,
+            "X-Workbench-Proxy-Token": env.WORKBENCH_PROXY_TOKEN,
+          },
+          timeout: 1000,
+        },
+        (response) => {
+          let body = "";
+          response.on("data", (chunk) => {
+            body += chunk;
+            if (body.length > 10000)
+              req.destroy(new Error("Oversized health response"));
+          });
+          response.on("error", reject);
+          response.on("end", () => {
+            try {
+              resolve(response.statusCode === 200 ? JSON.parse(body) : null);
+            } catch (error) {
+              reject(error);
+            }
+          });
+        },
+      );
+      req.on("timeout", () =>
+        req.destroy(new Error("Health request timed out")),
+      );
+      req.on("error", reject);
+      req.end();
     });
-    const health = await response.json();
-    if (response.ok && health.ok && health.uiEntry) {
+    if (health?.ok && health.uiEntry) {
       ready = true;
       break;
     }
