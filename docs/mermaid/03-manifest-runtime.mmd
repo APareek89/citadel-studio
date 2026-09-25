@@ -1,0 +1,43 @@
+%% 03 IMPLEMENTED — preflight, scheduling and bounded reflection
+flowchart TD
+INPUT["Prepare run request<br/>[FUNCTION]<br/>in: project, config, non-empty input<br/>out: graph and credential references"]:::fn
+SCHEMA["Validate graph structure and schemas<br/>[LIBRARY · Zod + Ajv]<br/>in: graph with at most 80 nodes and 160 edges<br/>out: errors or valid typed definition"]:::data
+READY{"Preflight ready?<br/>[FUNCTION]<br/>in: model access, input at most 40000 chars, graph and sandbox status<br/>out: accept or reject"}:::dec
+SNAP["Pin graph snapshot and start deadline<br/>[FUNCTION]<br/>in: accepted request; active runs below 12<br/>out: run ID and AbortSignal"]:::fn
+ORDER["Order executable data graph<br/>[FUNCTION]<br/>in: acyclic data edges and bounded feedback edges<br/>out: deterministic execution order"]:::fn
+MAP["Resolve node input<br/>[FUNCTION]<br/>in: edge mapping and prior outputs<br/>out: previous, original or all context"]:::fn
+KIND{"Node role?<br/>[FUNCTION]<br/>in: current node<br/>out: model, tool, check or passthrough"}:::dec
+BUDGET{"Provider budget available?<br/>[FUNCTION]<br/>in: calls, known-rate reserve and signal<br/>out: queue or reject<br/>maxCalls 1–30; at most 3 calls active globally"}:::dec
+AGENT["Generate candidate<br/>[AGENT · run.config.model]<br/>in: prompt, mapped input, optional repair feedback<br/>out: text or schema-shaped JSON"]:::agent
+TOOL["Execute declared tool<br/>[FUNCTION]<br/>in: mapped input and tool enum<br/>out: transformed text or isolated code result<br/>see diagram 07 for custom code"]:::fn
+CHECK["Evaluate candidate<br/>[FUNCTION]<br/>in: candidate, required/forbidden phrases, length and schema<br/>out: reasons and optional model-review request"]:::fn
+JUDGE["Optional model judgment<br/>[AGENT · run.config.model]<br/>in: rubric and candidate; maximum 512 output tokens<br/>out: boolean pass and reason"]:::agent
+PASS{"All configured checks pass?<br/>[FUNCTION]<br/>in: deterministic reasons and optional model verdict<br/>out: accept, repair or block"}:::dec
+REPAIR{"Validator has feedback edge and allowance?<br/>[FUNCTION]<br/>in: validator revision count<br/>out: retry earlier agent or block<br/>maxRevisions 0–3"}:::dec
+EVENT["Append invocation evidence<br/>[DATA · redacted run events + JSONL]<br/>in: start/end, input, output, usage, errors<br/>out: inspectable invocation history"]:::data
+OUTPUT["Release final output<br/>[FUNCTION]<br/>in: final output-node input after checks<br/>out: completed result"]:::term
+STOP["Stop with explicit status<br/>[FUNCTION]<br/>in: preflight error, rejection, timeout or cancellation<br/>out: blocked, failed or cancelled with partial events"]:::term
+INPUT --> SCHEMA --> READY
+READY -->|"yes"| SNAP --> ORDER --> MAP --> KIND
+READY -->|"no"| STOP
+KIND -->|"agent"| BUDGET
+BUDGET -->|"available; per-call timeout at most 90s"| AGENT --> CHECK
+BUDGET -->|"exhausted or unknown rate under dollar cap"| STOP
+KIND -->|"tool"| TOOL --> EVENT
+KIND -->|"guardrail or validator"| CHECK
+KIND -->|"coordinator passthrough"| EVENT
+KIND -->|"output"| OUTPUT
+CHECK -->|"prompt configured"| JUDGE --> PASS
+CHECK -->|"deterministic checks only"| PASS
+PASS -->|"yes"| EVENT
+PASS -->|"no"| REPAIR
+REPAIR -->|"yes; feedback passed to earlier agent"| MAP
+REPAIR -->|"no"| STOP
+EVENT -->|"next node"| MAP
+SNAP -.->|"graph deadline 1–180s or user stop"| STOP
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;

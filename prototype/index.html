@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#182922" />
+  <title>Citadel — Agent workspace</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23192a22'/%3E%3Cpath d='M6 25V10h5v6h3V6h5v10h3v-6h5v15Z' fill='%23d9e7c7'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="rail" aria-label="Workspace navigation">
+      <button class="brand-mark" data-action="about" title="About Citadel" aria-label="About Citadel"><svg viewBox="0 0 32 32"><path d="M5 26V9h5v6h4V5h5v10h4V9h5v17H5Z" fill="currentColor"/></svg></button>
+      <button class="rail-button active" data-page="graph" title="Graph studio" aria-label="Graph studio" data-icon="graph"></button>
+      <button class="rail-button" data-action="library" title="Node library" aria-label="Node library" data-icon="layers"></button>
+      <button class="rail-button" data-page="runs" title="Run history" aria-label="Run history" data-icon="activity"></button>
+      <button class="rail-button" data-page="blueprint" title="Product blueprint" aria-label="Product blueprint" data-icon="book"></button>
+      <div class="rail-spacer"></div>
+      <button class="rail-button" data-action="settings" title="Connections" aria-label="Connections" data-icon="sliders"></button>
+      <div class="avatar" title="Local workspace">AP</div>
+    </nav>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumbs"><strong>Citadel</strong><span>/</span><span>Personal workspace</span><span class="local-label">LOCAL DEMO</span></div>
+        <div class="topbar-actions"><button class="command-button" data-action="search"><span data-icon="search"></span><span>Find anything</span><kbd>⌘ K</kbd></button><span class="save-state"><i></i> <span id="save-state">Saved locally</span></span><button class="button small" data-action="new"><span data-icon="plus"></span> New system</button></div>
+      </header>
+      <section class="project-header">
+        <div class="project-heading"><div class="project-icon" data-icon="network"></div><div><div class="eyebrow">AGENT SYSTEM <span class="revision" id="revision">v1</span></div><h1 id="project-title">Research & evidence assistant</h1></div></div>
+        <div class="project-actions"><button class="button" data-action="import"><span data-icon="git"></span> Import code</button><button class="button" data-action="export"><span data-icon="download"></span> Export graph</button><button class="button primary" data-action="run"><span data-icon="play"></span><span class="run-label">Run in playground</span></button></div>
+      </section>
+      <div class="workspace-tabs"><div class="tabs"><button class="tab active" data-page="graph"><span data-icon="graph"></span>Graph</button><button class="tab" data-page="runs"><span data-icon="activity"></span>Runs <span class="count" id="run-count">0</span></button><button class="tab" data-page="blueprint"><span data-icon="book"></span>Blueprint</button></div><div class="prototype-label"><i></i> Interactive prototype · simulated execution</div></div>
+      <main id="main-content">
+        <div id="graph-page" class="page graph-page">
+          <div class="graph-workspace">
+            <section class="graph-column">
+              <div class="canvas-toolbar"><div class="segmented"><button class="active" data-view="structure">Structure</button><button data-view="execution">Run path</button></div><div class="canvas-toolbar-right"><button class="hidden-nodes-button" data-action="hidden-nodes"><span data-icon="layers"></span>Hidden nodes<span class="count">4</span></button><button class="quiet-button" data-action="validate"><span data-icon="check"></span><span id="graph-health">Check structure</span></button><button class="icon-button" data-action="fit" title="Fit graph" aria-label="Fit graph" data-icon="maximize"></button></div></div>
+              <div class="graph-canvas" id="graph-canvas"><div class="graph-hint"><span class="tiny-dot"></span> Click a node or connection to inspect it</div><div id="graph-inner" class="graph-inner"><svg id="edge-layer" viewBox="0 0 1100 550" aria-label="Graph connections"></svg><div id="node-layer"></div></div><div class="graph-legend"><span><i class="legend-line"></i> Control flow</span><span><i class="legend-line dashed"></i> Tool / feedback</span><span id="zoom-label">100%</span></div><div class="graph-caption">ONE SYSTEM. EVERY DECISION VISIBLE.</div></div>
+              <div id="trace-strip" class="trace-strip hidden"></div>
+              <section class="playground"><div class="playground-heading"><div><span data-icon="terminal"></span><strong>Playground</strong><span class="subtle"> / </span><span id="playground-status" class="subtle">Ready when you are</span></div><button class="text-button" data-action="settings"><span class="connected-dot"></span>Demo fixtures<span data-icon="chevron"></span></button></div><div class="playground-body"><div class="test-input"><label class="field-label" for="scenario">SAMPLE INPUT <select id="scenario" aria-label="Test scenario"><option value="happy">Happy path</option><option value="repair">Needs revision</option><option value="blocked">Guardrail block</option></select></label><textarea id="sample-input" spellcheck="false">Compare three approaches to agent memory. Recommend one for a small support team, with sources.</textarea><div class="input-footer"><span>Local fixture · no API calls</span><button class="button primary small" data-action="run"><span data-icon="play"></span><span class="run-label">Run system</span></button></div></div><div class="response-panel" aria-live="polite"><div class="response-label"><span class="field-label">SYSTEM RESPONSE</span><span id="response-badge" class="subtle">Waiting for run</span></div><div id="response-content" class="response-placeholder"><span data-icon="spark"></span><p>Follow the thought-to-action trail.</p><span>Run a sample to watch the graph light up.<br>Every node keeps its inputs, outputs and decisions.</span></div></div></div></section>
+            </section>
+            <aside class="inspector" id="inspector" aria-label="Node and connection inspector"></aside>
+          </div>
+        </div>
+        <div id="runs-page" class="page hidden"></div>
+        <div id="blueprint-page" class="page hidden"></div>
+      </main>
+      <footer class="statusbar"><span><i class="connected-dot"></i> Workspace stored on this device</span><span id="statusbar-summary">6 workflow nodes · 4 hidden nodes · 2 policy gates</span><span>Draft graph <span id="footer-version">v1</span><span class="footer-dot">·</span><span>Prototype 01</span></span></footer>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+  <div id="modal-root"></div>
+  <script src="app.js"></script>
+</body>
+</html>

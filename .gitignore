@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.local/
+.env*
+!.env.example
+*accessKeys*.csv
+*credentials*
+mysecrets*
+*.pem
+*.key
+output/
+tmp/
+.playwright-cli/
+.DS_Store
+coverage/

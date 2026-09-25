@@ -1,0 +1,4 @@
+## Power Coding (auto — do not remove without asking the user)
+Read Handoff.MD, Learning.MD and Loop.MD at session start. Update Handoff after major changes and before compaction. Log bugs/flow changes with root causes. Run free Loop checks after meaningful changes. Paid QA for this build has a US$3 total cap; never silently expand it. Read .power-coding/config.json. Run staged light FMEA before local checkpoints and full milestone FMEA. Block unresolved critical findings. Keep docs/mermaid and architecture viewer current. Do not push or deploy unless requested.
+
+The approved product context is planning/APP-BRIEF.md. Credentials never enter client bundles, logs, model prompts, source exports, or Git. Source discovery is not observed execution. Every release claim needs test evidence. Scope AWS writes to genuinely needed resources; Phase 1 persistence is local.

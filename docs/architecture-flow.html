@@ -1,0 +1,272 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Architecture Flow</title>
+<style>
+ body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:1100px;margin:0 auto;padding:24px 20px 80px;color:#1f2937;background:#fafafa}
+ h1{border-bottom:2px solid #e5e7eb;padding-bottom:8px}
+ h2{margin-top:36px;border-top:1px solid #e5e7eb;padding-top:18px;color:#111827}
+ pre.mermaid{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:14px 0 28px;overflow:auto;text-align:center}
+ .hint{position:sticky;top:0;background:#fff8e1;border:1px solid #f0d264;border-radius:6px;padding:8px 12px;font-size:13px;color:#5a4a00;margin-bottom:16px}
+ .mermaid svg{max-width:100%;height:auto}
+</style></head><body>
+<div class="hint">Tip: use Ctrl/Cmd + scroll or browser zoom to enlarge a diagram.</div>
+<h1>Architecture Flow</h1>
+<h2>01 MASTER — local application and ownership boundaries</h2>
+<pre class="mermaid">%% 01 MASTER — local application and ownership boundaries
+%% IMPLEMENTED means source inspected, not that every live journey has passed QA.
+flowchart TD
+UI["IMPLEMENTED · Five-mode workspace&lt;br/&gt;[LIBRARY · React + React Flow]&lt;br/&gt;in: user goal, graph edits, selected model&lt;br/&gt;out: same-origin API request"]:::data
+API["IMPLEMENTED · Local API boundary&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: browser request on loopback&lt;br/&gt;out: local operation after Host, Origin and JSON checks"]:::fn
+MODE{"IMPLEMENTED · Operation selection&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: requested mode&lt;br/&gt;out: owning module"}:::dec
+ALIGN["IMPLEMENTED · Alignment and generation&lt;br/&gt;[AGENT · selected config.model]&lt;br/&gt;in: brief and answers&lt;br/&gt;out: questions, assumptions and graph&lt;br/&gt;see diagram 05"]:::agent
+RUN["IMPLEMENTED · Manifest execution&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: graph snapshot and input&lt;br/&gt;out: invocation events and terminal result&lt;br/&gt;see diagram 03"]:::fn
+REPO["IMPLEMENTED · Source discovery and trusted adapter&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: selected local repository&lt;br/&gt;out: source map or isolated overview run&lt;br/&gt;see diagram 04"]:::fn
+MODES["IMPLEMENTED · Compare, eval and red-team coordination&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: 2–5 candidates, 1–20 cases or up to 6 approved probes&lt;br/&gt;out: runs with grouped evidence&lt;br/&gt;see diagram 05"]:::fn
+EXPORT["IMPLEMENTED · Portable project export&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: supported project revision&lt;br/&gt;out: secret-free runnable ZIP&lt;br/&gt;see diagram 06"]:::fn
+PROVIDER["IMPLEMENTED · Provider gateway&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: bounded request and credential ID&lt;br/&gt;out: model text and usage&lt;br/&gt;see diagram 02"]:::fn
+STORE["IMPLEMENTED · Local workspace and event journal&lt;br/&gt;[DATA · private JSON + JSONL]&lt;br/&gt;in: snapshots and redacted events&lt;br/&gt;out: restorable project and run history"]:::data
+RESULT["IMPLEMENTED · Inspect selected invocation&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: recorded graph, input, output, status&lt;br/&gt;out: node detail and visible run state"]:::term
+UI --&gt; API --&gt; MODE
+MODE --&gt;|"Build alignment"| ALIGN
+MODE --&gt;|"Build execution"| RUN
+MODE --&gt;|"Connect and Debug"| REPO
+MODE --&gt;|"Model Lab, Evals, Red Team"| MODES
+MODE --&gt;|"Launch download"| EXPORT
+ALIGN --&gt; PROVIDER
+RUN --&gt; PROVIDER
+REPO --&gt;|"only mediated model calls"| PROVIDER
+MODES --&gt; RUN
+MODES --&gt;|"source-owned campaigns"| REPO
+MODES --&gt;|"planner or judge"| PROVIDER
+MODES --&gt; STORE
+ALIGN --&gt; STORE
+RUN --&gt; STORE
+REPO --&gt; STORE
+STORE --&gt; RESULT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<h2>02 IMPLEMENTED — server credentials and five provider adapters</h2>
+<pre class="mermaid">%% 02 IMPLEMENTED — server credentials and five provider adapters
+flowchart TD
+SOURCE{"Credential source&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: user-selected source&lt;br/&gt;out: session entry or configured file import"}:::dec
+SESSION["Receive key&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: key and provider&lt;br/&gt;out: validated length and provider enum"]:::fn
+FILE["Read configured local secrets file&lt;br/&gt;[DATA · server-only file]&lt;br/&gt;in: explicitly configured path&lt;br/&gt;out: provider-specific key match"]:::data
+VAULT["Retain key in server memory&lt;br/&gt;[DATA · credential Map]&lt;br/&gt;in: provider key&lt;br/&gt;out: opaque ID and public metadata"]:::data
+LIST["Discover account-accessible models&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: credential ID&lt;br/&gt;out: provider model metadata"]:::fn
+CAPS["Apply text adapter capability rules&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: metadata and model ID&lt;br/&gt;out: advertised support and verified flag"]:::fn
+CHECK{"Selected model available and key validated?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: config and cached catalog&lt;br/&gt;out: ready or explicit error"}:::dec
+ADAPT["Build fixed-endpoint provider request&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: system prompt, input, token limit&lt;br/&gt;out: Gemini, OpenAI, Anthropic, Groq or OpenRouter body"]:::fn
+SPEND{"Configured global spend guard permits call?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: known pricing and conservative token reserve&lt;br/&gt;out: reserve before dispatch or reject&lt;br/&gt;WORKBENCH_SPEND_LIMIT_USD, when configured"}:::dec
+LEDGER["Record persistent spend reservation&lt;br/&gt;[DATA · private usage.json]&lt;br/&gt;in: reservation and successful reported usage&lt;br/&gt;out: spend carried across server restarts"]:::data
+LLM["Generate model response&lt;br/&gt;[AGENT · config.model]&lt;br/&gt;in: model-specific request&lt;br/&gt;out: text, stop reason and reported usage"]:::agent
+NORMALIZE["Normalize and redact response&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: provider body&lt;br/&gt;out: text, usage and available cost estimate"]:::fn
+RECORD["Record successful model verification&lt;br/&gt;[DATA · session verified-model Set]&lt;br/&gt;in: successful request and selected model&lt;br/&gt;out: verified execution label"]:::data
+ERROR["Credential or provider error&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: failure status&lt;br/&gt;out: redacted actionable message"]:::term
+SOURCE --&gt;|"session"| SESSION
+SOURCE --&gt;|"local file"| FILE
+SESSION --&gt; VAULT
+FILE --&gt; VAULT
+VAULT --&gt; LIST --&gt; CAPS --&gt; CHECK
+CHECK --&gt;|"yes"| ADAPT --&gt; SPEND
+SPEND --&gt;|"allowed or guard not configured"| LLM --&gt; NORMALIZE --&gt; RECORD
+SPEND --&gt;|"configured: reserve before call"| LEDGER
+SPEND --&gt;|"unknown rate or exhausted"| ERROR
+NORMALIZE --&gt;|"reconcile reported successful usage"| LEDGER
+CHECK --&gt;|"no"| ERROR
+LLM --&gt;|"HTTP error, empty output or truncation"| ERROR
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<h2>03 IMPLEMENTED — preflight, scheduling and bounded reflection</h2>
+<pre class="mermaid">%% 03 IMPLEMENTED — preflight, scheduling and bounded reflection
+flowchart TD
+INPUT["Prepare run request&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: project, config, non-empty input&lt;br/&gt;out: graph and credential references"]:::fn
+SCHEMA["Validate graph structure and schemas&lt;br/&gt;[LIBRARY · Zod + Ajv]&lt;br/&gt;in: graph with at most 80 nodes and 160 edges&lt;br/&gt;out: errors or valid typed definition"]:::data
+READY{"Preflight ready?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: model access, input at most 40000 chars, graph and sandbox status&lt;br/&gt;out: accept or reject"}:::dec
+SNAP["Pin graph snapshot and start deadline&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: accepted request; active runs below 12&lt;br/&gt;out: run ID and AbortSignal"]:::fn
+ORDER["Order executable data graph&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: acyclic data edges and bounded feedback edges&lt;br/&gt;out: deterministic execution order"]:::fn
+MAP["Resolve node input&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: edge mapping and prior outputs&lt;br/&gt;out: previous, original or all context"]:::fn
+KIND{"Node role?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: current node&lt;br/&gt;out: model, tool, check or passthrough"}:::dec
+BUDGET{"Provider budget available?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: calls, known-rate reserve and signal&lt;br/&gt;out: queue or reject&lt;br/&gt;maxCalls 1–30; at most 3 calls active globally"}:::dec
+AGENT["Generate candidate&lt;br/&gt;[AGENT · run.config.model]&lt;br/&gt;in: prompt, mapped input, optional repair feedback&lt;br/&gt;out: text or schema-shaped JSON"]:::agent
+TOOL["Execute declared tool&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: mapped input and tool enum&lt;br/&gt;out: transformed text or isolated code result&lt;br/&gt;see diagram 07 for custom code"]:::fn
+CHECK["Evaluate candidate&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: candidate, required/forbidden phrases, length and schema&lt;br/&gt;out: reasons and optional model-review request"]:::fn
+JUDGE["Optional model judgment&lt;br/&gt;[AGENT · run.config.model]&lt;br/&gt;in: rubric and candidate; maximum 512 output tokens&lt;br/&gt;out: boolean pass and reason"]:::agent
+PASS{"All configured checks pass?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: deterministic reasons and optional model verdict&lt;br/&gt;out: accept, repair or block"}:::dec
+REPAIR{"Validator has feedback edge and allowance?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: validator revision count&lt;br/&gt;out: retry earlier agent or block&lt;br/&gt;maxRevisions 0–3"}:::dec
+EVENT["Append invocation evidence&lt;br/&gt;[DATA · redacted run events + JSONL]&lt;br/&gt;in: start/end, input, output, usage, errors&lt;br/&gt;out: inspectable invocation history"]:::data
+OUTPUT["Release final output&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: final output-node input after checks&lt;br/&gt;out: completed result"]:::term
+STOP["Stop with explicit status&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: preflight error, rejection, timeout or cancellation&lt;br/&gt;out: blocked, failed or cancelled with partial events"]:::term
+INPUT --&gt; SCHEMA --&gt; READY
+READY --&gt;|"yes"| SNAP --&gt; ORDER --&gt; MAP --&gt; KIND
+READY --&gt;|"no"| STOP
+KIND --&gt;|"agent"| BUDGET
+BUDGET --&gt;|"available; per-call timeout at most 90s"| AGENT --&gt; CHECK
+BUDGET --&gt;|"exhausted or unknown rate under dollar cap"| STOP
+KIND --&gt;|"tool"| TOOL --&gt; EVENT
+KIND --&gt;|"guardrail or validator"| CHECK
+KIND --&gt;|"coordinator passthrough"| EVENT
+KIND --&gt;|"output"| OUTPUT
+CHECK --&gt;|"prompt configured"| JUDGE --&gt; PASS
+CHECK --&gt;|"deterministic checks only"| PASS
+PASS --&gt;|"yes"| EVENT
+PASS --&gt;|"no"| REPAIR
+REPAIR --&gt;|"yes; feedback passed to earlier agent"| MAP
+REPAIR --&gt;|"no"| STOP
+EVENT --&gt;|"next node"| MAP
+SNAP -.-&gt;|"graph deadline 1–180s or user stop"| STOP
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<h2>04 IMPLEMENTED — source map and narrowly trusted Learning Studio execution</h2>
+<pre class="mermaid">%% 04 IMPLEMENTED — source map and narrowly trusted Learning Studio execution
+flowchart TD
+PATH["Resolve selected local checkout&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: local repository path&lt;br/&gt;out: canonical directory; URL cloning unavailable"]:::fn
+FILES["Discover source resources&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: repository directory&lt;br/&gt;out: at most 500 files, depth at most 6&lt;br/&gt;excludes secrets, symlinks and generated/dependency folders"]:::fn
+MAP["Build source-linked graph&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: recognized paths and symbols&lt;br/&gt;out: workflow nodes plus collapsed UI, DB/auth and Markdown"]:::fn
+TRUST{"Approved source and platform?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: adapter, pinned revision and 14 allowlisted files&lt;br/&gt;out: isolated execution or discovery only&lt;br/&gt;macOS sandbox-exec required"}:::dec
+OPAQUE["Retain discovery-only map&lt;br/&gt;[DATA · source references]&lt;br/&gt;in: unsupported or changed source&lt;br/&gt;out: coverage and opaque components; no execution"]:::term
+GIT["Read exact committed source&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: approved revision and source allowlist&lt;br/&gt;out: source matching current files&lt;br/&gt;replacement objects disabled; inherited GIT overrides removed"]:::fn
+BUNDLE["Bundle pinned overview with test shims&lt;br/&gt;[LIBRARY · esbuild]&lt;br/&gt;in: verified source, bridge, local libraries&lt;br/&gt;out: scratch runner without provider keys"]:::data
+OS["Start reviewed-source worker&lt;br/&gt;[LIBRARY · macOS sandbox-exec]&lt;br/&gt;in: scratch bundle and request&lt;br/&gt;out: constrained process&lt;br/&gt;no network, file writes or process fork; 256MB JS heap"]:::data
+BRIDGE["Validate worker messages&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: JSON lines from worker&lt;br/&gt;out: event or bounded provider request&lt;br/&gt;2MB message, 12MB total stdout, at most 6 model requests"]:::fn
+LLM["Execute mediated model call&lt;br/&gt;[AGENT · run.config.model]&lt;br/&gt;in: original source prompts and bounded request&lt;br/&gt;out: response returned over stdin; key stays in parent"]:::agent
+ART["Render isolated overview artifact&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: original schema-validated overview&lt;br/&gt;out: original HTML and in-memory artifact; no DB or billing"]:::fn
+RESULT["Return overview result and trace&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: artifact and observed invocation events&lt;br/&gt;out: source-linked output with ungrounded/retrieval-disabled notice"]:::term
+CLEAN["Force-stop and remove scratch files&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: error, cancellation or 120-second deadline&lt;br/&gt;out: terminated worker and preserved partial trace"]:::term
+PATH --&gt; FILES --&gt; MAP --&gt; TRUST
+TRUST --&gt;|"unsupported or mismatched"| OPAQUE
+TRUST --&gt;|"approved overview only"| GIT --&gt; BUNDLE --&gt; OS --&gt; BRIDGE
+BRIDGE --&gt;|"model request"| LLM
+LLM --&gt;|"response, never credential"| OS
+BRIDGE --&gt;|"completed original render"| ART --&gt; RESULT
+OS -.-&gt;|"timeout, cancellation, protocol error"| CLEAN
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<h2>05 IMPLEMENTED — alignment, comparison, red-team and evaluation coordination</h2>
+<pre class="mermaid">%% 05 IMPLEMENTED — alignment, comparison, red-team and evaluation coordination
+flowchart TD
+ALIGN["Align the requested app&lt;br/&gt;[AGENT · selected config.model]&lt;br/&gt;in: brief; one planning call, 5000 output tokens&lt;br/&gt;out: assumptions, questions and 1–5 proposed agents&lt;br/&gt;The model writes clarification questions"]:::agent
+ASK["Present open questions&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: model-written questions&lt;br/&gt;out: user updates the brief and requests a new plan"]:::ask
+APPROVE{"User accepts the proposed graph?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: explicit Accept action&lt;br/&gt;out: saved revision or further alignment"}:::dec
+COMPARE["Prepare candidate slots&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: one input, 2–5 configs, node/workflow strategy&lt;br/&gt;out: supported candidates with shared budget at most 30 calls"]:::fn
+RED["Produce bounded probe plan&lt;br/&gt;[AGENT · selected config.model]&lt;br/&gt;in: local-test or owned-staging declaration and brand rules&lt;br/&gt;out: at most 6 synthetic security, brand or customer probes&lt;br/&gt;one planning call, 2200 output tokens"]:::agent
+SCOPE{"User confirms the finite plan?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: confirmed=true and proposed campaign&lt;br/&gt;out: start once or retain proposed state"}:::dec
+SOURCE["Review supported source heuristics&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: inspected importer rules or manifest prompts&lt;br/&gt;out: suspected findings, not reproduced vulnerabilities"]:::fn
+CASES["Save evaluation suite version&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: 1–20 cases, assertions and optional judge rubric&lt;br/&gt;out: immutable suite version and report with pinned criteria"]:::fn
+SCHEDULE["Execute each accepted work item&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: pinned graph/repo, config/input and campaign budget at most 30&lt;br/&gt;out: independent run and invocation events&lt;br/&gt;manifest or supported source adapter"]:::fn
+KIND{"Which result consumer?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: completed or partial run&lt;br/&gt;out: comparison, evaluation or red-team evidence"}:::dec
+ASSERT["Evaluate deterministic assertions&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: case output, contains/JSON/length/regex rules&lt;br/&gt;out: reasons; regex execution limited to 30ms"]:::fn
+JUDGE["Optional rubric judgment&lt;br/&gt;[AGENT · suite.judge.config.model]&lt;br/&gt;in: rubric, expected behavior, actual output&lt;br/&gt;out: boolean and reason; maximum 512 output tokens"]:::agent
+EVAL["Assign evaluation verdict and regression&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: assertions, optional judgment and same-criteria baseline&lt;br/&gt;out: pass, fail, error or unscored; explicit criteria-change note"]:::fn
+PROBE{"Probe has a literal failure signal?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: approved probe and completed output&lt;br/&gt;out: deterministic check or semantic review"}:::dec
+LITERAL["Check literal failure signal&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: prohibited substring and output&lt;br/&gt;out: reproduced or passed finding with run ID"]:::fn
+REVIEW["Review semantic behavior&lt;br/&gt;[AGENT · selected config.model]&lt;br/&gt;in: expected behavior, brand rules and candidate&lt;br/&gt;out: suspected or passed finding; maximum 512 output tokens&lt;br/&gt;human confirmation required for suspected violations"]:::agent
+HISTORY["Persist grouped evidence&lt;br/&gt;[DATA · workspace snapshots]&lt;br/&gt;in: comparisons, suites, reports, campaigns and run links&lt;br/&gt;out: retained partial and completed evidence"]:::data
+PROMOTE["Draft regression case&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: selected trace/finding input and run ID&lt;br/&gt;out: editable expectation and assertions awaiting review"]:::fn
+ALIGN --&gt; ASK
+ASK -.-&gt;|"answers appended to brief"| ALIGN
+ALIGN --&gt; APPROVE
+APPROVE --&gt;|"accepted; run requested separately"| SCHEDULE
+APPROVE --&gt;|"revise"| ALIGN
+COMPARE --&gt; SCHEDULE
+RED --&gt; SCOPE
+SCOPE --&gt;|"confirmed"| SOURCE --&gt; SCHEDULE
+SCOPE --&gt;|"not confirmed"| RED
+CASES --&gt; SCHEDULE --&gt; KIND
+KIND --&gt;|"comparison: retain each candidate"| HISTORY
+KIND --&gt;|"eval: successful execution"| ASSERT
+KIND --&gt;|"red team: successful execution"| PROBE
+KIND --&gt;|"failed/cancelled: error or inconclusive"| HISTORY
+ASSERT --&gt;|"judge configured"| JUDGE --&gt; EVAL
+ASSERT --&gt;|"deterministic only"| EVAL --&gt; HISTORY
+PROBE --&gt;|"yes"| LITERAL --&gt; HISTORY
+PROBE --&gt;|"no"| REVIEW --&gt; HISTORY
+HISTORY --&gt; PROMOTE --&gt; CASES
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<h2>06 IMPLEMENTED export — PLANNED portability gate and phase-3 hosting</h2>
+<pre class="mermaid">%% 06 IMPLEMENTED export — PLANNED portability gate and phase-3 hosting
+flowchart TD
+PROJECT["IMPLEMENTED · Selected project revision&lt;br/&gt;[DATA · versioned graph]&lt;br/&gt;in: saved manifest application&lt;br/&gt;out: cloned and validated export input"]:::data
+SUPPORTED{"IMPLEMENTED · Manifest-owned project?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: project ownership&lt;br/&gt;out: permit export or keep source in its repository"}:::dec
+EXPORT["IMPLEMENTED · Assemble runnable project&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: supported graph and shared executor modules&lt;br/&gt;out: CLI source, dependencies, graph test and setup instructions"]:::fn
+FILTER["IMPLEMENTED · Filter private runtime data&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: explicitly selected file set&lt;br/&gt;out: redacted graph, no node source paths, empty environment template"]:::fn
+ZIP["IMPLEMENTED · Package download&lt;br/&gt;[LIBRARY · archiver]&lt;br/&gt;in: selected files&lt;br/&gt;out: portable project ZIP, not a deployment"]:::data
+CHECK{"PLANNED · Automatic clean-directory readiness gate&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: extracted package and compatible environment&lt;br/&gt;out: verified readiness or failure&lt;br/&gt;not enforced by the export endpoint today"}:::dec
+READY["PLANNED · Verified portable release&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: clean install, graph checks and sample-run evidence&lt;br/&gt;out: readiness claim supported by that evidence"]:::term
+FAIL["PLANNED · Preserve portability failure&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: install or execution failure&lt;br/&gt;out: actionable failure evidence"]:::term
+BLOCK["IMPLEMENTED · Reject source-owned export&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: connected repository project&lt;br/&gt;out: explicit supported-boundary message"]:::term
+AWS["PLANNED · Hosted UI and bounded API&lt;br/&gt;[LIBRARY · AWS S3, CloudFront, Lambda]&lt;br/&gt;in: separately verified deployment build&lt;br/&gt;out: hosted service; no resources created yet"]:::data
+DB["PLANNED · Hosted accounts and project storage&lt;br/&gt;[LIBRARY · Cognito + DynamoDB]&lt;br/&gt;in: authorized user operations&lt;br/&gt;out: tenant-scoped durable data"]:::data
+RUNNER["PLANNED · Local runner bridge or hosted sandbox&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: authorized source/code job&lt;br/&gt;out: isolated execution with explicit cost limits&lt;br/&gt;not supplied by static hosting or Lambda automatically"]:::fn
+PROJECT --&gt; SUPPORTED
+SUPPORTED --&gt;|"yes"| EXPORT --&gt; FILTER --&gt; ZIP
+SUPPORTED --&gt;|"no"| BLOCK
+ZIP -.-&gt;|"required release QA, not automatic today"| CHECK
+CHECK --&gt;|"passes"| READY
+CHECK --&gt;|"fails"| FAIL
+READY -.-&gt;|"separate phase-3 work"| AWS
+AWS --&gt; DB
+AWS -.-&gt;|"source/code execution needs separate design"| RUNNER
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<h2>07 IMPLEMENTED — Docker is required for arbitrary code nodes</h2>
+<pre class="mermaid">%% 07 IMPLEMENTED — Docker is required for arbitrary code nodes
+flowchart TD
+CODE["Prepare custom code tool&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: node code and mapped input&lt;br/&gt;out: isolated JavaScript invocation"]:::fn
+CHECK{"Docker and node:22-alpine image available?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: local image inspection, 3-second check&lt;br/&gt;out: accept or block"}:::dec
+BLOCK["Block unsupported execution&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: unavailable sandbox&lt;br/&gt;out: setup error; no host execution fallback"]:::term
+START["Create uniquely named sandbox&lt;br/&gt;[LIBRARY · Docker]&lt;br/&gt;in: code, stdin input and no provider credential&lt;br/&gt;out: non-root container&lt;br/&gt;network none; read-only; no mounts; all capabilities dropped"]:::data
+LIMIT["Apply process limits&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: container execution&lt;br/&gt;out: bounded workload&lt;br/&gt;128MB memory; 0.5 CPU; 32 PIDs; 15-second timeout"]:::fn
+RESULT{"Workload completes within output limit?&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: process status and stdout&lt;br/&gt;out: result or failure&lt;br/&gt;stdout limit 100000 characters"}:::dec
+CLEAN["Force-remove named container&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: completion, abort, timeout or excessive output&lt;br/&gt;out: docker rm -f attempted; launcher cleaned up"]:::fn
+RETURN["Return tool outcome&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: captured result or error&lt;br/&gt;out: node completion or failure event"]:::term
+CODE --&gt; CHECK
+CHECK --&gt;|"no"| BLOCK
+CHECK --&gt;|"yes"| START --&gt; LIMIT --&gt; RESULT
+RESULT --&gt;|"success"| CLEAN
+RESULT --&gt;|"failure or cancellation"| CLEAN
+CLEAN --&gt; RETURN
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad:false, securityLevel:"loose", theme:"base",
+  themeVariables:{ fontFamily:"-apple-system, Segoe UI, Roboto, sans-serif", fontSize:"14px" } });
+await mermaid.run({ querySelector:"pre.mermaid" });
+</script>
+</body></html>

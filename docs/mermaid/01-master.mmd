@@ -1,0 +1,37 @@
+%% 01 MASTER — local application and ownership boundaries
+%% IMPLEMENTED means source inspected, not that every live journey has passed QA.
+flowchart TD
+UI["IMPLEMENTED · Five-mode workspace<br/>[LIBRARY · React + React Flow]<br/>in: user goal, graph edits, selected model<br/>out: same-origin API request"]:::data
+API["IMPLEMENTED · Local API boundary<br/>[FUNCTION]<br/>in: browser request on loopback<br/>out: local operation after Host, Origin and JSON checks"]:::fn
+MODE{"IMPLEMENTED · Operation selection<br/>[FUNCTION]<br/>in: requested mode<br/>out: owning module"}:::dec
+ALIGN["IMPLEMENTED · Alignment and generation<br/>[AGENT · selected config.model]<br/>in: brief and answers<br/>out: questions, assumptions and graph<br/>see diagram 05"]:::agent
+RUN["IMPLEMENTED · Manifest execution<br/>[FUNCTION]<br/>in: graph snapshot and input<br/>out: invocation events and terminal result<br/>see diagram 03"]:::fn
+REPO["IMPLEMENTED · Source discovery and trusted adapter<br/>[FUNCTION]<br/>in: selected local repository<br/>out: source map or isolated overview run<br/>see diagram 04"]:::fn
+MODES["IMPLEMENTED · Compare, eval and red-team coordination<br/>[FUNCTION]<br/>in: 2–5 candidates, 1–20 cases or up to 6 approved probes<br/>out: runs with grouped evidence<br/>see diagram 05"]:::fn
+EXPORT["IMPLEMENTED · Portable project export<br/>[FUNCTION]<br/>in: supported project revision<br/>out: secret-free runnable ZIP<br/>see diagram 06"]:::fn
+PROVIDER["IMPLEMENTED · Provider gateway<br/>[FUNCTION]<br/>in: bounded request and credential ID<br/>out: model text and usage<br/>see diagram 02"]:::fn
+STORE["IMPLEMENTED · Local workspace and event journal<br/>[DATA · private JSON + JSONL]<br/>in: snapshots and redacted events<br/>out: restorable project and run history"]:::data
+RESULT["IMPLEMENTED · Inspect selected invocation<br/>[FUNCTION]<br/>in: recorded graph, input, output, status<br/>out: node detail and visible run state"]:::term
+UI --> API --> MODE
+MODE -->|"Build alignment"| ALIGN
+MODE -->|"Build execution"| RUN
+MODE -->|"Connect and Debug"| REPO
+MODE -->|"Model Lab, Evals, Red Team"| MODES
+MODE -->|"Launch download"| EXPORT
+ALIGN --> PROVIDER
+RUN --> PROVIDER
+REPO -->|"only mediated model calls"| PROVIDER
+MODES --> RUN
+MODES -->|"source-owned campaigns"| REPO
+MODES -->|"planner or judge"| PROVIDER
+MODES --> STORE
+ALIGN --> STORE
+RUN --> STORE
+REPO --> STORE
+STORE --> RESULT
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
