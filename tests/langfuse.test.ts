@@ -185,7 +185,10 @@ test("Langfuse uses Basic auth and v2 fields, groups traces and syncs idempotent
       });
       assert.ok(!JSON.stringify(a).includes(secretKey));
       const runIds = imported.map((r) => r.id).sort();
+      const pagesBeforeRepeat = calls.filter((c) => c.pathname.includes("observations")).length;
       await syncLangfuse(p.id, 24);
+      assert.equal(calls.filter((c) => c.pathname.includes("observations")).length - pagesBeforeRepeat, 2,
+        "the same pagination cursor is fresh for each sync, not mixed with active project markers");
       assert.deepEqual(
         state.runs
           .filter((r) => r.projectId === p.id)

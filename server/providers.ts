@@ -11,21 +11,25 @@ import type {
   ModelConfig,
   Usage,
 } from "../shared/types.js";
-import { id, now, dataDir } from "./store.js";
+import { id, now, assertWriteCapacity } from "./store.js";
+import { authEnabled, dataRoot, tenantRoot, tenantMap, tenantSet, tenantValue, hasTenant } from "./tenant.js";
+import { registerIntegrationSecret, registerServerSecret } from "./integration-secrets.js";
 export const secretsPath =
   process.env.WORKBENCH_SECRETS_FILE ||
   path.join(homedir(), "Documents", "mysecrets");
-const vault = new Map<
+const vault = tenantMap<
   string,
   { meta: Credential; key: string; models: Model[] }
->();
-const verified = new Set<string>();
-const rejected = new Map<string, string>();
-export const credentials = () =>
-  [...vault.values()].map((c) => ({ ...c.meta }));
+>("credentials");
+const verified = tenantSet<string>("verified-models");
+const rejected = tenantMap<string, string>("rejected-models");
+export const credentials = () => {
+  ensureBuiltinCredentials();
+  return [...vault.values()].map((c) => ({ ...c.meta }));
+};
 export function redact(value: string): string {
   let result = redactIntegrationSecrets(String(value));
-  for (const { key } of vault.values())
+  for (const { key } of hasTenant() ? vault.values() : [])
     if (key) result = result.split(key).join("[REDACTED]");
   return result
     .replace(
@@ -77,10 +81,12 @@ export function addCredential(
     source,
     valid: false,
   };
+  registerIntegrationSecret(key.trim());
   vault.set(meta.id, { meta, key: key.trim(), models: [] });
   return { ...meta };
 }
 export function importCredential(provider: Provider) {
+  if (authEnabled()) throw new Error("Host secret file imports are disabled. Use a configured provider or your own session key.");
   if (!existsSync(secretsPath))
     throw new Error(
       "Local secrets file was not found. Add a session key instead.",
@@ -121,6 +127,7 @@ export function importCredential(provider: Provider) {
   return addCredential(provider, `${provider} · local file`, key, "local-file");
 }
 export function getCredential(credentialId: string) {
+  ensureBuiltinCredentials();
   const item = vault.get(credentialId);
   if (!item)
     throw new Error(
@@ -185,6 +192,7 @@ async function api(
 }
 export async function discoverModels(credentialId: string): Promise<Model[]> {
   const c = getCredential(credentialId);
+  if (c.meta.source === "example" || c.meta.source === "configured") return c.models;
   try {
     const data = await api(
       c.meta.provider,
@@ -289,15 +297,35 @@ export interface GenerateOptions {
   responseSchema?: Record<string, unknown>;
 }
 const spendLimit = Number(process.env.WORKBENCH_SPEND_LIMIT_USD || 0);
-const ledgerPath = path.join(dataDir, "usage.json");
-const spendLedger = existsSync(ledgerPath)
-  ? JSON.parse(readFileSync(ledgerPath, "utf8"))
-  : { reservedUsd: 0, completedUsd: 0, calls: 0 };
-function ledgerSave() {
-  writeFileSync(ledgerPath, JSON.stringify(spendLedger), { mode: 0o600 });
+interface Ledger { reservedUsd: number; completedUsd: number; calls: number }
+const emptyLedger = (): Ledger => ({ reservedUsd: 0, completedUsd: 0, calls: 0 });
+const ledgerFile = () => path.join(tenantRoot(), "usage.json");
+const ledger = () => tenantValue<Ledger>("spend-ledger", () => existsSync(ledgerFile()) ? JSON.parse(readFileSync(ledgerFile(), "utf8")) : emptyLedger());
+function ledgerSave() { writeFileSync(ledgerFile(), JSON.stringify(ledger()), { mode: 0o600 }); }
+export function spendStatus() { return { ...ledger(), limitUsd: spendLimit || undefined }; }
+const configuredModel = process.env.WORKBENCH_CONFIGURED_MODEL || "gemini-3.5-flash-lite";
+const configuredKey = process.env.GEMINI_API_KEY;
+if (configuredKey) registerServerSecret(configuredKey);
+const sharedLimit = Number(process.env.WORKBENCH_SHARED_SPEND_LIMIT_USD || "0.25");
+let sharedLedger: Ledger | undefined;
+function sharedSpend(): Ledger {
+  if (!sharedLedger) {
+    const file = path.join(dataRoot, "configured-provider-usage.json");
+    sharedLedger = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : emptyLedger();
+  }
+  return sharedLedger!;
 }
-export function spendStatus() {
-  return { ...spendLedger, limitUsd: spendLimit || undefined };
+function saveShared() { writeFileSync(path.join(dataRoot, "configured-provider-usage.json"), JSON.stringify(sharedSpend()), { mode: 0o600 }); }
+function ensureBuiltinCredentials() {
+  if (!authEnabled()) return;
+  if (!vault.has("cached-example")) vault.set("cached-example", {
+    meta: { id: "cached-example", label: "Cached workflow example · no API call", provider: "gemini", source: "example", valid: true }, key: "",
+    models: [{ id: "cached-example", name: "Cached fixture (no model)", provider: "gemini", text: true, structured: false, tools: false, available: true, verified: false }],
+  });
+  if (configuredKey && !vault.has("configured-provider")) vault.set("configured-provider", {
+    meta: { id: "configured-provider", label: "Portfolio provider · shared allowance", provider: "gemini", source: "configured", valid: true }, key: configuredKey,
+    models: [{ id: configuredModel, name: configuredModel, provider: "gemini", text: true, structured: true, tools: true, available: true, verified: false, reason: "Configured provider; account inference has not been verified in this workspace." }],
+  });
 }
 export async function generate(
   config: ModelConfig,
@@ -307,8 +335,12 @@ export async function generate(
 ): Promise<GenerateResult> {
   system = redact(system);
   input = redact(input);
+  if (authEnabled() && process.env.WORKBENCH_PROVIDER_MODE !== "live") throw new Error("Live provider calls are disabled in this preview. Try the cached workflow example.");
+  assertWriteCapacity(4 * 1024 * 1024);
   const c = getCredential(config.credentialId);
   const m = modelFor(config);
+  if (c.meta.source === "example") throw new Error("Cached provider is restricted to the separate example workflow.");
+  const spendLedger = ledger();
   const responseSchema = opts.responseSchema
     ? safeObject(opts.responseSchema)
     : undefined;
@@ -387,15 +419,22 @@ export async function generate(
     Buffer.byteLength(system + input),
     max,
   );
+  if (c.meta.source === "configured") {
+    if (!(sharedLimit > 0) || reservation === undefined || sharedSpend().reservedUsd + reservation > sharedLimit)
+      throw new Error("The shared portfolio allowance is exhausted. Use your own provider key.");
+  }
   if (spendLimit) {
     if (reservation === undefined)
       throw new Error("Session dollar cap needs a model with known pricing.");
     if (spendLedger.reservedUsd + reservation > spendLimit)
       throw new Error("Session spend cap reached. No request was sent.");
-    spendLedger.reservedUsd += reservation;
-    spendLedger.calls++;
-    ledgerSave();
   }
+  if (c.meta.source === "configured") {
+    sharedSpend().reservedUsd += reservation!; sharedSpend().calls++; saveShared();
+  }
+  spendLedger.reservedUsd += reservation || 0;
+  spendLedger.calls++;
+  ledgerSave();
   let data: any;
   try {
     data = await api(p, c.key, route, body, opts.signal);
@@ -447,10 +486,13 @@ export async function generate(
       "Provider returned no text (possibly blocked by its safety policy).",
     );
   const actual = estimate(p, config.model, inputTokens, outputTokens);
-  if (spendLimit && actual !== undefined) {
+  if (actual !== undefined) {
     spendLedger.reservedUsd += actual - (reservation || 0);
     spendLedger.completedUsd += actual;
     ledgerSave();
+  }
+  if (c.meta.source === "configured" && actual !== undefined) {
+    sharedSpend().reservedUsd += actual - (reservation || 0); sharedSpend().completedUsd += actual; saveShared();
   }
   verified.add(`${config.credentialId}:${config.model}`);
   m.verified = true;

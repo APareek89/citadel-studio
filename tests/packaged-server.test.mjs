@@ -33,6 +33,7 @@ test(
         {
           cwd: scratch,
           env: {
+            PORTFOLIO_AUTH_ENABLED: "0",
             PATH: process.env.PATH,
             HOME: scratch,
             npm_config_cache: path.join(homedir(), ".npm"),
@@ -68,6 +69,7 @@ test(
         {
           cwd: scratch,
           env: {
+            PORTFOLIO_AUTH_ENABLED: "0",
             PATH: process.env.PATH,
             HOME: scratch,
             PORT: String(port),

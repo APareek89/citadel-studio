@@ -1,0 +1,29 @@
+%% 14 IMPLEMENTED modules — portfolio integration and live acceptance tracked separately
+flowchart TD
+B["Open Citadel Studio<br/>[DATA · browser]<br/>in: app URL and cookie<br/>out: account check"]:::data
+S{"Session active?<br/>[FUNCTION · Auth.js and PostgreSQL]<br/>in: signed session and revocation row<br/>out: verified user or sign-in gate"}:::dec
+L["Sign up or sign in<br/>[LIBRARY · Auth.js Credentials and bcrypt]<br/>in: email and password; signup 12 characters to 72 bytes<br/>out: signed session and revocable database record"]:::data
+T["Enter owner namespace<br/>[LIBRARY · AsyncLocalStorage]<br/>in: verified user UUID<br/>out: private state, credential vault and source paths"]:::data
+P["Persist source bundle<br/>[LIBRARY · private S3]<br/>in: filtered owner source files<br/>out: private object reference and verified digest"]:::data
+C{"Choose example path<br/>[FUNCTION · example action]<br/>in: owner action<br/>out: source project or separate cached manifest"}:::dec
+M["Inspect source map<br/>[FUNCTION · static discovery]<br/>in: bundled repository<br/>out: visible and hidden nodes plus source references; no execution"]:::fn
+R["Run cached workflow<br/>[FUNCTION · normal preflight and scheduler]<br/>in: separate manifest, prepared input and fixture provider<br/>out: node events and prepared response; zero model calls"]:::fn
+O["Inspect recorded trace<br/>[DATA · owner run snapshot]<br/>in: actual scheduler events<br/>out: recorded graph, output and timing"]:::data
+E["Reset workspace on identity change<br/>[FUNCTION · React keyed workspace]<br/>in: signout, changed user or API 401<br/>out: cleared drafts and user-scoped project selection"]:::fn
+B --> S
+S -->|missing or revoked| L
+L --> S
+S -->|active| T
+T --> P
+T --> C
+C -->|source| M
+C -->|cached workflow| R
+R --> O
+T -->|session change| E
+E --> S
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;

@@ -1,3 +1,4 @@
+import { authEnabled, requireTenant, tenantKey } from "./tenant.js";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type {
@@ -7,7 +8,7 @@ import type {
   Run,
   RunEvent,
 } from "../shared/types.js";
-import { state, projectById, id, now, save, journal } from "./store.js";
+import { state, projectById, id, now, save, journal, assertWriteCapacity } from "./store.js";
 import { safeObject, redact } from "./providers.js";
 import { registerIntegrationSecret } from "./integration-secrets.js";
 import { bus } from "./runs.js";
@@ -78,7 +79,7 @@ export const traceSchema = z.object({
   status: z.enum(["running", "completed", "failed"]).optional(),
   spans: z.array(spanSchema).min(1).max(1000),
 });
-const tokens = new Map<string, { digest: Buffer; lastReceivedAt?: string }>();
+const tokens = new Map<string, { ownerId: string; projectId: string; digest: Buffer; lastReceivedAt?: string }>();
 const digest = (token: string) => createHash("sha256").update(token).digest();
 export const receiverEndpoint = (
   projectId: string,
@@ -88,16 +89,16 @@ export const receiverEndpoint = (
 export function receiverStatus(projectId: string) {
   projectById(projectId);
   return {
-    enabled: tokens.has(projectId),
+    enabled: tokens.has(tenantKey(projectId)),
     endpoint: receiverEndpoint(projectId),
-    lastReceivedAt: tokens.get(projectId)?.lastReceivedAt,
+    lastReceivedAt: tokens.get(tenantKey(projectId))?.lastReceivedAt,
   };
 }
 export function createReceiver(projectId: string) {
   projectById(projectId);
   const token = "wb_" + randomBytes(32).toString("base64url");
   registerIntegrationSecret(token);
-  tokens.set(projectId, { digest: digest(token) });
+  tokens.set(tenantKey(projectId), { ownerId: requireTenant().id, projectId, digest: digest(token) });
   const endpoint = receiverEndpoint(projectId);
   return {
     token,
@@ -106,10 +107,11 @@ export function createReceiver(projectId: string) {
   };
 }
 export function disconnectReceiver(projectId: string) {
-  tokens.delete(projectId);
+  projectById(projectId);
+  tokens.delete(tenantKey(projectId));
 }
 export function authorizeReceiver(projectId: string, authorization?: string) {
-  const active = tokens.get(projectId);
+  const active = tokens.get(tenantKey(projectId));
   const token = authorization?.startsWith("Bearer ")
     ? authorization.slice(7)
     : "";
@@ -122,6 +124,17 @@ export function authorizeReceiver(projectId: string, authorization?: string) {
     throw new Error(
       "Telemetry token is missing, expired or belongs to another project.",
     );
+}
+
+/** Native ingestion resolves its actor from the unguessable receiver capability, never a caller owner ID. */
+export function receiverOwner(projectId: string, authorization?: string): string {
+  const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+  if (!token || token.length > 512) throw new Error("Receiver unauthorized");
+  const value = digest(token);
+  for (const receiver of tokens.values()) {
+    if (receiver.projectId === projectId && timingSafeEqual(receiver.digest, value)) return receiver.ownerId;
+  }
+  throw new Error("Receiver unauthorized");
 }
 const text = (value: unknown) =>
   value === undefined
@@ -385,6 +398,9 @@ export function recordTrace(
   return next;
 }
 export function commitObservedTraces(runs: Run[]) {
+  for (const run of runs) projectById(run.projectId);
+  assertWriteCapacity(Buffer.byteLength(JSON.stringify(runs)) * 3 + 65536);
+  if (state.runs.length + runs.filter(r => !state.runs.some(existing => existing.id === r.id)).length > 300) throw new Error("Workspace trace limit reached. Existing traces were preserved.");
   for (const next of runs) {
     const existing = state.runs.find((r) => r.id === next.id);
     if (existing) Object.assign(existing, next);
@@ -397,9 +413,9 @@ export function commitObservedTraces(runs: Run[]) {
       spanCount: next.external!.spans.length,
       status: next.status,
     });
-    if (next.external!.kind === "workbench" && tokens.has(next.projectId))
-      tokens.get(next.projectId)!.lastReceivedAt = now();
+    if (next.external!.kind === "workbench" && tokens.has(tenantKey(next.projectId)))
+      tokens.get(tenantKey(next.projectId))!.lastReceivedAt = now();
   }
   save();
-  for (const run of runs) bus.emit(run.id, run);
+  for (const run of runs) bus.emit(tenantKey(run.id), run);
 }

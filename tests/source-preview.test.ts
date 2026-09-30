@@ -155,6 +155,7 @@ globalThis.fetch = async () => { throw new Error('Provider network is disabled i
         {
           cwd: workspace,
           env: {
+            PORTFOLIO_AUTH_ENABLED: "0",
             PATH: process.env.PATH,
             TMPDIR: process.env.TMPDIR,
             PORT: String(port),

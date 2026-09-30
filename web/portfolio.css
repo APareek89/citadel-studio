@@ -1,0 +1,268 @@
+.lovable-ui .button {
+  border-radius: 9999px;
+  min-height: 32px;
+  font-weight: 480;
+}
+.lovable-ui .button.primary {
+  box-shadow: var(--shadow-button-accent);
+}
+.lovable-ui .card {
+  border-radius: 16px;
+}
+.lovable-ui input,
+.lovable-ui textarea,
+.lovable-ui select {
+  border-radius: 12px;
+}
+.lovable-ui .icon-button {
+  border-radius: 8px;
+}
+.lovable-ui .modal {
+  border-radius: 24px;
+  box-shadow: var(--shadow-floating-lg);
+}
+.lovable-ui .brand {
+  font-weight: 480;
+}
+.lovable-ui h1,
+.lovable-ui h2 {
+  font-weight: 480;
+}
+.lovable-ui .sidebar {
+  background: var(--bg-base);
+}
+.lovable-ui .topbar {
+  background: var(--bg-primary);
+}
+.portfolio-header-name {
+  white-space: nowrap;
+  font-size: 14px;
+}
+.portfolio-breadcrumb-divider {
+  color: var(--fg-tertiary);
+}
+.portfolio-account-email {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-secondary);
+  font-size: 12px;
+}
+.portfolio-auth-shell {
+  min-height: 100dvh;
+  background: var(--bg-base);
+  color: var(--fg-primary);
+}
+.portfolio-header {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+}
+.portfolio-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.portfolio-brand strong {
+  font-size: 16px;
+  font-weight: 480;
+}
+.portfolio-brand span {
+  color: var(--fg-tertiary);
+  font-size: 12px;
+}
+.portfolio-auth-layout {
+  max-width: 1056px;
+  margin: auto;
+  padding: 72px 32px;
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 72px;
+  align-items: center;
+}
+.portfolio-auth-intro h1 {
+  margin-top: 16px;
+  font-size: clamp(30px, 4vw, 44px);
+  line-height: 1.14;
+  letter-spacing: -1.4px;
+}
+.portfolio-auth-intro > p {
+  max-width: 420px;
+  color: var(--fg-secondary);
+  font-size: 16px;
+}
+.portfolio-auth-feature {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 24px;
+  color: var(--fg-secondary);
+}
+.portfolio-auth-feature svg {
+  color: var(--fg-tertiary);
+}
+.portfolio-auth-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: var(--shadow-surface-md);
+}
+.portfolio-auth-card h2 {
+  font-size: 24px;
+}
+.portfolio-auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.portfolio-auth-card label {
+  font-size: 13px;
+  font-weight: 480;
+  margin-top: 12px;
+}
+.portfolio-auth-card input {
+  min-height: 44px;
+  width: 100%;
+}
+.portfolio-auth-card .button {
+  min-height: 40px;
+}
+.portfolio-auth-card form > .button {
+  margin-top: 16px;
+}
+.portfolio-auth-switch {
+  font-size: 13px;
+  margin: 20px 0;
+}
+.portfolio-auth-switch button {
+  color: var(--fg-accent);
+  font-weight: 480;
+  padding-left: 4px;
+}
+.portfolio-auth-limit {
+  margin: 16px 0 0;
+  line-height: 1.5;
+}
+.portfolio-auth-retry {
+  max-width: 540px;
+  margin: 64px auto;
+  padding: 24px;
+}
+.portfolio-example-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  font-size: 12px;
+}
+.portfolio-example-notice p {
+  margin: 0;
+  color: var(--fg-secondary);
+  max-width: 650px;
+}
+.portfolio-example-notice strong {
+  color: var(--fg-primary);
+}
+.portfolio-example-badge {
+  border: 1px solid var(--border-primary);
+  border-radius: 9999px;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-secondary);
+}
+@media (max-width: 1100px) {
+  .topbar .search-trigger,
+  .topbar .privacy-tag {
+    display: none;
+  }
+  .portfolio-account-email {
+    max-width: 150px;
+  }
+}
+@media (max-width: 800px) {
+  .portfolio-auth-layout {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+    gap: 32px;
+    padding: 32px 20px;
+  }
+  .portfolio-auth-intro h1 {
+    font-size: 32px;
+  }
+  .portfolio-auth-intro > p {
+    margin-bottom: 0;
+  }
+  .portfolio-auth-feature {
+    display: none;
+  }
+  .portfolio-header {
+    padding: 0 20px;
+    height: 64px;
+  }
+  .portfolio-header-name {
+    font-size: 12px;
+  }
+}
+@media (max-width: 600px) {
+  .portfolio-brand span,
+  .portfolio-account-email,
+  .portfolio-breadcrumb-divider,
+  .breadcrumbs > span:not(.portfolio-header-name),
+  .breadcrumbs > svg,
+  .breadcrumbs > strong:not(.portfolio-header-name) {
+    display: none;
+  }
+  .portfolio-auth-card {
+    padding: 24px;
+  }
+  .portfolio-example-notice {
+    padding: 12px;
+  }
+  .welcome > .row {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .topbar-actions {
+    gap: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Wrapped graph controls keep their natural height; the graph retains its own viewport. */
+.graph-panel > .graph-toolbar,
+.graph-panel > .graph-view-options,
+.graph-panel > .graph-caption,
+.graph-panel > .graph-bottom,
+.graph-panel > .expanded-graph-heading {
+  flex-shrink: 0;
+}
+@media (max-width: 780px) {
+  .workspace:not(.graph-fullscreen) .graph-panel {
+    height: auto;
+    min-height: 490px;
+  }
+  .workspace:not(.graph-fullscreen) .flow-wrap {
+    height: 320px;
+    flex: 0 0 320px;
+  }
+}

@@ -1,3 +1,4 @@
+import { bindTenant, tenantSet } from "./tenant.js";
 import { createHash } from "node:crypto";
 import {
   collectReviewEvidence,
@@ -363,7 +364,7 @@ export function evaluate(
   const snapshot = structuredClone(p.graph);
   const repoSnapshot = p.repo ? structuredClone(p.repo) : null;
   const budget = makeBudget(30);
-  void (async () => {
+  void bindTenant(async () => {
     try {
       for (const row of report.results) {
         const test = report.suite.cases.find((c) => c.id === row.caseId)!;
@@ -610,7 +611,7 @@ export async function planRedTeam(args: {
   save();
   return plan;
 }
-const redStarts = new Set<string>();
+const redStarts = tenantSet<string>("red-starts");
 export async function runRedTeam(
   planId: string,
   config: ModelConfig,
@@ -661,7 +662,7 @@ export async function runRedTeam(
     mode === "source-review" ? 1 : 30,
     mode === "source-review" ? 0.25 : undefined,
   );
-  void (async () => {
+  void bindTenant(async () => {
     try {
       if (mode === "source-review") {
         const generate = boundedGenerator(

@@ -1,9 +1,14 @@
+import rateLimit from "express-rate-limit";
+import { authEnabled, withTenant, tenantKey, bindTenant, requireTenant } from "./tenant.js";
+import { initializeAuth, mountAuth, requireAuth, sameOrigin, getUser } from "./auth.js";
+import { query } from "./db.js";
+import { examples } from "./examples.js";
 import express from "express";
 import { z, ZodError } from "zod";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { state, id, now, save, projectById } from "./store.js";
+import { state, id, now, save, projectById, assertWriteCapacity } from "./store.js";
 import {
   addCredential,
   credentials,
@@ -41,12 +46,13 @@ import {
   disconnectGithubToken,
   setGithubRedactionHook,
 } from "./github.js";
-import { importUploadedFolder } from "./uploads.js";
-import { registerIntegrationSecret } from "./integration-secrets.js";
+import { importUploadedFolder, ensureUploadedSource } from "./uploads.js";
+import { registerIntegrationSecret, registerServerSecret } from "./integration-secrets.js";
 import {
   createReceiver,
   receiverStatus,
   authorizeReceiver,
+  receiverOwner,
   recordTrace,
   disconnectReceiver,
 } from "./telemetry.js";
@@ -72,11 +78,18 @@ if (!development && !existsSync("dist/index.html")) {
   );
 }
 app.disable("x-powered-by");
-if (hosting.proxyToken) registerIntegrationSecret(hosting.proxyToken);
+const trustedProxy = process.env.WORKBENCH_TRUSTED_PROXY_IP || "172.28.0.3";
+app.set("trust proxy", (ip: string) => ip.replace(/^::ffff:/, "") === trustedProxy);
+await initializeAuth();
+app.get("/healthz", async (_req, res) => {
+  try { if (authEnabled()) await query("select 1"); res.json({ ok: true }); }
+  catch { res.status(503).json({ ok: false }); }
+});
+if (hosting.proxyToken) registerServerSecret(hosting.proxyToken);
 app.use((req, res, next) => {
   const host = req.headers.host;
   if (hosting.publicOrigin) {
-    if (!validProxyToken(req.headers["x-workbench-proxy-token"]))
+    if (!authEnabled() && !validProxyToken(req.headers["x-workbench-proxy-token"]))
       return res
         .status(403)
         .json({ error: "Authenticated proxy access required" });
@@ -84,6 +97,12 @@ app.use((req, res, next) => {
       return res.status(403).json({ error: "Unrecognized host" });
   } else if (!["127.0.0.1", "localhost"].includes(host?.split(":")[0] || ""))
     return res.status(403).json({ error: "Localhost access only" });
+  if (hosting.publicOrigin && authEnabled()) {
+    if (req.socket.remoteAddress?.replace(/^::ffff:/, "") !== trustedProxy)
+      return res.status(403).json({ error: "Trusted application proxy required" });
+    req.headers["x-forwarded-host"] = hosting.publicHost;
+    req.headers["x-forwarded-proto"] = "https";
+  }
   const origin = req.headers.origin;
   if (
     origin &&
@@ -101,7 +120,7 @@ app.use((req, res, next) => {
   if (req.path.startsWith("/api")) res.setHeader("Cache-Control", "no-store");
   if (
     ["POST", "PUT", "DELETE", "PATCH"].includes(req.method) &&
-    !req.is("application/json")
+    !req.path.startsWith("/auth/") && !req.is("application/json")
   )
     return res.status(415).json({ error: "Use application/json" });
   next();
@@ -109,13 +128,17 @@ app.use((req, res, next) => {
 setGithubRedactionHook(registerIntegrationSecret);
 // The proxy exposes this one ingestion route without browser Basic Auth.
 // Reject unknown receiver tokens before allocating/parsing a request body.
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   const native =
     req.method === "POST" &&
     req.path.match(/^\/api\/telemetry\/([A-Za-z0-9_-]+)\/spans$/);
   if (native) {
     try {
-      authorizeReceiver(native[1], req.headers.authorization);
+      const owner = receiverOwner(native[1], req.headers.authorization);
+      if (authEnabled() && !(await query("select 1 from users where id=$1 and disabled_at is null", [owner])).length)
+        throw new Error("Account is unavailable.");
+      res.locals.nativeReceiver = true;
+      if (authEnabled()) return withTenant(owner, next);
     } catch {
       return res
         .status(401)
@@ -129,6 +152,35 @@ app.use((req, res, next) => {
 });
 app.use("/api/repos/upload", express.json({ limit: "16mb" }));
 app.use(express.json({ limit: "2mb" }));
+app.use("/auth", express.urlencoded({ extended: false, limit: "16kb" }));
+mountAuth(app);
+app.use("/api", (req, res, next) => {
+  if (res.locals.nativeReceiver || req.path === "/health") return next();
+  return requireAuth(req, res, next);
+});
+app.use("/api", (req, res, next) => res.locals.nativeReceiver ? next() : sameOrigin(req, res, next));
+const mutationLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 60, standardHeaders: "draft-8", legacyHeaders: false,
+  skip: req => !authEnabled() || ["GET", "HEAD"].includes(req.method), message: { error: "Workspace action limit reached. Please wait." } });
+app.use("/api", mutationLimit);
+const actionWindows = new Map<string, { started: number; count: number }>();
+app.use("/api", (req, res, next) => {
+  if (!authEnabled() || res.locals.nativeReceiver || ["GET", "HEAD"].includes(req.method)) return next();
+  const key = requireTenant().id, at = Date.now();
+  let window = actionWindows.get(key);
+  if (!window || at - window.started > 15 * 60 * 1000) { window = { started: at, count: 0 }; actionWindows.set(key, window); }
+  if (++window.count > 60) return res.status(429).json({ error: "Workspace action limit reached. Please wait." });
+  next();
+});
+app.use("/api", async (req, _res, next) => {
+  if (authEnabled() && !["GET", "HEAD"].includes(req.method)) assertWriteCapacity(Buffer.byteLength(JSON.stringify(req.body || {})) * 3 + 65536);
+  const projectId = /^\/projects\/([^/]+)/.exec(req.path)?.[1] || req.body?.projectId;
+  if (projectId) {
+    const project = projectById(projectId);
+    if (project.repo) await ensureUploadedSource(project.repo);
+  }
+  next();
+});
+app.post("/api/examples", async (_req, res) => res.json(await examples()));
 const configSchema = z.object({
   credentialId: z.string().min(1),
   model: z.string().min(1),
@@ -205,6 +257,7 @@ app.post("/api/projects", (req, res) => {
     createdAt: now(),
     updatedAt: now(),
   });
+  if (state.projects.length >= 40) throw new Error("Workspace project limit reached.");
   state.projects.unshift(project);
   save();
   res.json(project);
@@ -330,11 +383,17 @@ app.get("/api/runs/:id/events", (req, res) => {
   res.flushHeaders();
   const send = (r: unknown) => res.write(`data: ${JSON.stringify(r)}\n\n`);
   send(run);
-  bus.on(run.id, send);
-  const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 15000);
+  const channel = tenantKey(run.id);
+  bus.on(channel, send);
+  const heartbeat = setInterval(bindTenant(async () => {
+    try {
+      if (authEnabled() && !(await getUser(req, true))) { res.end(); return; }
+      res.write(": heartbeat\n\n");
+    } catch { res.end(); }
+  }), 15000);
   req.on("close", () => {
     clearInterval(heartbeat);
-    bus.off(run.id, send);
+    bus.off(channel, send);
   });
 });
 app.get(
@@ -418,9 +477,11 @@ app.post("/api/repos/upload", async (req, res) => {
       config: configSchema.optional(),
     })
     .parse(req.body);
+  if (state.projects.length >= 40) throw new Error("Workspace project limit reached.");
   const upload = await importUploadedFolder({ name: b.name, files: b.files });
   const discovered = await mapSource(upload.rootPath, b.mapping, b.config);
   discovered.repo.sourceKind = "upload";
+  discovered.repo.sourceBundle = upload.sourceBundle;
   discovered.repo.name = upload.name;
   discovered.graph.name = upload.name;
   const p: Project = {
@@ -460,6 +521,7 @@ app.post("/api/projects/:id/remap", async (req, res) => {
     });
   if (p.repo.sourceKind === "upload") {
     discovered.repo.sourceKind = "upload";
+    discovered.repo.sourceBundle = p.repo.sourceBundle;
     discovered.repo.name = p.repo.name;
     discovered.graph.name = p.repo.name;
   }
@@ -586,11 +648,12 @@ app.post("/api/repos/connect", async (req, res) => {
       config: configSchema.optional(),
     })
     .parse(req.body);
-  if (hosting.publicOrigin && !/^https:\/\//i.test(b.path))
+  if ((hosting.publicOrigin || authEnabled()) && !/^https:\/\//i.test(b.path))
     return res.status(403).json({
       error:
         "Host filesystem imports are disabled. Connect GitHub or upload a folder.",
     });
+  if (!b.projectId && state.projects.length >= 40) throw new Error("Workspace project limit reached.");
   const existing = b.projectId ? projectById(b.projectId) : undefined;
   const priorGraph = existing?.graph,
     priorRepo = existing?.repo;
@@ -798,7 +861,7 @@ if (!development) {
   });
   app.use(vite.middlewares);
 }
-const server = app.listen(port, "127.0.0.1", () =>
+const server = app.listen(port, process.env.HOST || "127.0.0.1", () =>
   console.log(`Agent Workbench: http://127.0.0.1:${port}`),
 );
 function shutdown() {

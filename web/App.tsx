@@ -79,6 +79,8 @@ import {
   recordedGraph,
 } from "./graph-presentation";
 
+import { PortfolioSession, ThemeButton, expireSession, captureSession, type PortfolioAccount } from "./portfolio-auth";
+
 type GitHubStatus = {
   connected: boolean;
   authSource: "token" | "gh" | null;
@@ -251,12 +253,14 @@ async function api<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
+  const sessionAtStart = captureSession();
   const res = await fetch(`/api${path}`, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
+    if (res.status === 401) expireSession(sessionAtStart);
     let e;
     try {
       e = await res.json();
@@ -485,6 +489,12 @@ function GraphSection({
 const NODE_TYPES = { agent: AgentNode, section: GraphSection };
 
 export default function App() {
+  return <PortfolioSession>{account => <Workspace key={account.user?.id || "local-fixture"} account={account} />}</PortfolioSession>;
+}
+
+function Workspace({ account }: { account: PortfolioAccount }) {
+  const { theme, setTheme } = account;
+  const selectionKey = `citadel-project:${account.user?.id || "local-fixture"}`;
   const [data, setData] = useState<Bootstrap>(EMPTY),
     [booting, setBooting] = useState(true),
     [error, setError] = useState(""),
@@ -493,10 +503,7 @@ export default function App() {
   const [mode, setMode] = useState<Mode>("build"),
     [step, setStep] = useState("Align"),
     [projectId, setProjectId] = useState(
-      () => localStorage.getItem("workbench-project") || "",
-    ),
-    [theme, setTheme] = useState(
-      () => localStorage.getItem("workbench-theme") || "system",
+      () => localStorage.getItem(selectionKey) || "",
     );
   const [credentialModal, setCredentialModal] = useState(false),
     [newModal, setNewModal] = useState(false),
@@ -507,6 +514,8 @@ export default function App() {
     null,
   );
   const sourceCodeRef = useRef<HTMLPreElement>(null);
+  const pendingExample = useRef<{ projectId: string; config: ModelConfig; input: string; run?: Run } | null>(null);
+  const [exampleRevision, setExampleRevision] = useState(0);
   const [graphExpanded, setGraphExpanded] = useState(false);
   const [fullscreenInspector, setFullscreenInspector] = useState(false);
   const [graphDetail, setGraphDetail] = useState<"overview" | "all">(
@@ -601,6 +610,8 @@ export default function App() {
   const project = data.projects.find((p) => p.id === projectId),
     activeMode = MODES.find((m) => m.id === mode)!;
   const isHosted = data.system.hosting?.mode === "hosted";
+  const cachedExample = project?.example?.kind === "cached-workflow";
+  const selectableCredentials = data.credentials.filter(c => cachedExample ? c.source === "example" : c.source !== "example");
   const run = data.runs.find(
       (r) => r.id === runId && r.projectId === projectId,
     ),
@@ -701,7 +712,7 @@ export default function App() {
         ? current
         : {
             ...current,
-            credentialId: b.credentials.find((c) => c.valid)?.id || "",
+            credentialId: b.credentials.find((c) => c.valid && c.source !== "example")?.id || "",
             model: "",
           },
     );
@@ -741,8 +752,8 @@ export default function App() {
       .catch(() => {});
   }, []);
   useEffect(() => {
-    if (projectId) localStorage.setItem("workbench-project", projectId);
-  }, [projectId]);
+    if (projectId) localStorage.setItem(selectionKey, projectId);
+  }, [projectId, selectionKey]);
   useEffect(() => {
     if (!project) return;
     setBrief(project.brief);
@@ -786,17 +797,20 @@ export default function App() {
       setMode("connect");
       setStep("Map");
     }
-  }, [project?.id]);
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () =>
-      (document.documentElement.dataset.theme =
-        theme === "system" ? (media.matches ? "dark" : "light") : theme);
-    apply();
-    media.addEventListener("change", apply);
-    localStorage.setItem("workbench-theme", theme);
-    return () => media.removeEventListener("change", apply);
-  }, [theme]);
+    const prepared = pendingExample.current;
+    if (prepared?.projectId === project.id) {
+      pendingExample.current = null;
+      setConfig(prepared.config);
+      setInput(prepared.input);
+      setMode(prepared.run ? "build" : "connect");
+      setStep(prepared.run ? "Run & Test" : "Map");
+      if (prepared.run) {
+        setRunId(prepared.run.id);
+        setView("observed");
+        setInspectorTab("Output");
+      }
+    }
+  }, [project?.id, exampleRevision]);
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -808,11 +822,11 @@ export default function App() {
     return () => document.removeEventListener("keydown", f);
   }, [busy]);
   useEffect(() => {
-    if (!config.credentialId) {
-      const c = data.credentials.find((c) => c.valid);
-      if (c) setConfig((v) => ({ ...v, credentialId: c.id }));
+    if (!selectableCredentials.some(c => c.id === config.credentialId && c.valid)) {
+      const c = selectableCredentials.find(c => c.valid);
+      if (c || config.credentialId) setConfig(v => ({ ...v, credentialId: c?.id || "", model: c ? preferredModel(models[c.id] || [])?.id || "" : "" }));
     }
-  }, [data.credentials, config.credentialId]);
+  }, [project?.id, data.credentials, config.credentialId]);
   const hasActive =
     data.runs.some((r) => !terminal(r)) ||
     data.redPlans.some((p) => p.status === "running") ||
@@ -997,6 +1011,26 @@ export default function App() {
         ? current
         : initialSelection(p.graph),
     );
+  }
+  async function openExample(runCached = false) {
+    await act(runCached ? "Running cached workflow" : "Preparing example", async () => {
+      const example = await api<{ project: Project; runnableProject: Project; config: ModelConfig; input: string }>("/examples", "POST", {});
+      const target = runCached ? example.runnableProject : example.project;
+      let preparedRun: Run | undefined;
+      if (runCached) {
+        const ready = await api<Preflight>("/preflight", "POST", { projectId: target.id, config: example.config, input: example.input });
+        if (!ready.ok) throw new Error("The cached workflow is not ready. Please try again.");
+        preparedRun = await api<Run>("/runs", "POST", { projectId: target.id, config: example.config, input: example.input });
+      }
+      await refresh();
+      if (runCached) {
+        const catalog = await api<Model[]>(`/credentials/${example.config.credentialId}/models`);
+        setModels(current => ({ ...current, [example.config.credentialId]: catalog }));
+      }
+      pendingExample.current = { projectId: target.id, config: runCached ? example.config : config, input: runCached ? example.input : "", run: preparedRun };
+      syncProject(target);
+      setExampleRevision(value => value + 1);
+    });
   }
   function requireConfig(c = config) {
     if (
@@ -1262,7 +1296,7 @@ export default function App() {
             }}
           >
             <option value="">Select credential</option>
-            {data.credentials.map((c) => (
+            {selectableCredentials.map((c) => (
               <option key={c.id} value={c.id} disabled={!c.valid}>
                 {c.label} · {c.provider}
                 {!c.valid ? " · validate first" : ""}
@@ -1288,7 +1322,7 @@ export default function App() {
                 {m.name || m.id}
                 {!m.available
                   ? ` · ${m.reason || "unavailable"}`
-                  : m.verified
+                  : m.verified || cachedExample
                     ? ""
                     : " · advertised"}
               </option>
@@ -2000,7 +2034,7 @@ export default function App() {
                     }
                     onClick={() =>
                       act("Stopping run", async () => {
-                        await api(`/runs/${runId}/cancel`, "POST");
+                        await api(`/runs/${runId}/cancel`, "POST", {});
                         await refresh();
                       })
                     }
@@ -2882,8 +2916,10 @@ export default function App() {
               disabled={!!busy || !passed || dirty || isImported}
               onClick={() =>
                 act("Preparing export", async () => {
+                  const sessionAtStart = captureSession();
                   const res = await fetch(`/api/projects/${projectId}/export`);
                   if (!res.ok) {
+                    if (res.status === 401) expireSession(sessionAtStart);
                     let e;
                     try {
                       e = await res.json();
@@ -3099,17 +3135,17 @@ export default function App() {
                 <strong>
                   {githubReady
                     ? `Connected${githubStatus?.login ? ` as ${githubStatus.login}` : ""}`
-                    : "Connect your GitHub account"}
+                    : "Public repository or private access"}
                 </strong>
                 <p>
                   {githubReady
                     ? `Using ${githubStatus?.authSource === "token" ? "a validated personal access token" : "the GitHub CLI on this computer"}.`
-                    : "Use a GitHub CLI login or a personal access token with read access to your repository."}
+                    : "Paste a public GitHub URL below. For a private repository, add an optional token with read access."}
                 </p>
               </div>
             </div>
             <div className="row connection-actions">
-              <button
+              {(!isHosted || githubReady) && <button
                 className="button small"
                 disabled={!!busy}
                 onClick={() =>
@@ -3117,24 +3153,24 @@ export default function App() {
                     const status = await refreshGitHub(true);
                     if (!status.connected)
                       throw new Error(
-                        "No GitHub session found. Sign in with the GitHub CLI on this computer or validate a token below.",
+                        "No saved GitHub access. Public repository URLs still work; private repositories require a token.",
                       );
                   })
                 }
               >
                 {githubReady ? "Refresh repositories" : "Check GitHub CLI"}
-              </button>
+              </button>}
               {githubStatus?.authSource === "token" && (
                 <button
                   className="text-button"
                   disabled={!!busy}
                   onClick={() =>
                     act("Disconnecting GitHub token", async () => {
-                      await api("/github/token", "DELETE");
+                      await api("/github/token", "DELETE", {});
                       setGithubRepos(null);
                       await refreshGitHub();
                       setNotice(
-                        "GitHub token removed. Any existing local CLI login remains available.",
+                        "GitHub token removed from your session.",
                       );
                     })
                   }
@@ -3147,7 +3183,7 @@ export default function App() {
               <summary>
                 {githubReady
                   ? "Use a different GitHub token"
-                  : "Connect with a personal access token"}
+                  : "Optional token for a private repository"}
               </summary>
               <form
                 onSubmit={(e) => {
@@ -3159,14 +3195,14 @@ export default function App() {
                     await api("/github/token", "POST", { token });
                     await refreshGitHub(true);
                     setNotice(
-                      "GitHub token validated. Choose a repository to map.",
+                      "GitHub token validated for this account. Choose a repository to map.",
                     );
                   });
                 }}
               >
                 <Field
                   label="Personal access token"
-                  hint="Use repository read access only. Sent to this local server; never stored in your browser."
+                  hint="Use repository read access only. Kept in your server-side session; never stored in your browser."
                 >
                   <input
                     type="password"
@@ -3174,7 +3210,7 @@ export default function App() {
                     spellCheck={false}
                     value={githubToken}
                     onChange={(e) => setGithubToken(e.target.value)}
-                    placeholder="GitHub personal access token"
+                    placeholder="Optional token for private repositories"
                   />
                 </Field>
                 <button
@@ -3336,8 +3372,7 @@ export default function App() {
                 !folderReview.name.trim()
               : !repoPath.trim() ||
                 (sourceMethod === "github" &&
-                  (!githubReady ||
-                    !repoPath.startsWith("https://github.com/"))))
+                  !repoPath.startsWith("https://github.com/")))
           }
           onClick={() =>
             act("Mapping source", async () => {
@@ -3372,7 +3407,7 @@ export default function App() {
           {sourceMethod === "github"
             ? "GitHub repositories use a managed read-only source clone. "
             : sourceMethod === "upload"
-              ? "Selected files are sent only to this local server. "
+              ? "Selected files are stored in your workspace. "
               : "Local source is read without changing your files. "}
           Connecting source does not run application code.
         </div>
@@ -3538,6 +3573,7 @@ export default function App() {
                       await api(
                         `/projects/${projectId}/telemetry/token`,
                         "DELETE",
+                        {},
                       );
                       setNativeIssued(null);
                       await refreshConnections();
@@ -3719,7 +3755,7 @@ await trace.run(() => trace.span(
                   disabled={!!busy}
                   onClick={() =>
                     act("Disconnecting Langfuse", async () => {
-                      await api(`/projects/${projectId}/langfuse`, "DELETE");
+                      await api(`/projects/${projectId}/langfuse`, "DELETE", {});
                       await refreshConnections();
                       setNotice(
                         "Langfuse disconnected. Previously imported traces remain available.",
@@ -5336,7 +5372,7 @@ await trace.run(() => trace.span(
       <span className="soft-icon">
         <Workflow size={33} />
       </span>
-      <span className="eyebrow">AGENT WORKBENCH</span>
+      <span className="eyebrow">CITADEL STUDIO</span>
       <h1>
         Build with intent.
         <br />
@@ -5347,7 +5383,10 @@ await trace.run(() => trace.span(
         Start with an idea, or bring an application you already have.
       </p>
       <div className="row">
-        <button className="button primary" onClick={() => setNewModal(true)}>
+        <button className="button primary" disabled={!!busy} onClick={() => openExample()}>
+          <Play size={16} /> Try with an example
+        </button>
+        <button className="button" onClick={() => setNewModal(true)}>
           <Plus size={16} /> Create a project
         </button>
         <button className="button" onClick={() => navigate("connect")}>
@@ -5422,6 +5461,7 @@ await trace.run(() => trace.span(
       <aside className="sidebar">
         <a
           className="brand"
+          aria-label="Citadel Studio"
           href="#"
           onClick={(e) => {
             e.preventDefault();
@@ -5432,7 +5472,7 @@ await trace.run(() => trace.span(
             <Workflow size={20} />
           </span>
           <span>
-            Workbench<span className="brand-caption">AGENT SYSTEMS</span>
+            Citadel Studio<span className="brand-caption">AGENT WORKBENCH</span>
           </span>
         </a>
         <div className="workspace-label">
@@ -5461,6 +5501,9 @@ await trace.run(() => trace.span(
             <Plus size={16} />
           </button>
         </div>
+        <button className="sidebar-link portfolio-example-link" aria-label="Try with an example" title="Try with an example" disabled={!!busy} onClick={() => openExample()}>
+          <Play size={16} /><span>Try with an example</span><span className="portfolio-example-badge">Free</span>
+        </button>
         <div className="nav-label">WORKSPACE</div>
         <nav className="main-nav" aria-label="Workspace modes">
           {MODES.map((m) => (
@@ -5530,18 +5573,23 @@ await trace.run(() => trace.span(
             <span>
               {isHosted ? "Private hosted workspace" : "Local workspace"}
             </span>
-            <span className="avatar">AP</span>
+            <span className="avatar" aria-label="Your account">{(account.user?.name || account.user?.email || "CS").slice(0, 2).toUpperCase()}</span>
           </div>
         </div>
       </aside>
       <div className="app-main">
         <header className="topbar">
           <div className="breadcrumbs">
+            <strong className="portfolio-header-name">Citadel Studio</strong>
+            <span className="portfolio-breadcrumb-divider">/</span>
             <span>{activeMode.label}</span>
             <ChevronRight size={13} />
             <strong>{step}</strong>
           </div>
           <div className="topbar-actions">
+            <span className="portfolio-account-email" title={account.user?.email}>{account.user?.email || "Local fixture"}</span>
+            <ThemeButton theme={theme} setTheme={setTheme} />
+            {account.enabled && <button className="button small" disabled={!!busy} onClick={() => act("Signing out", account.signOut)}>Sign out</button>}
             <button
               className="search-trigger"
               aria-label="Find anything"
@@ -5670,6 +5718,14 @@ await trace.run(() => trace.span(
             </button>
           </div>
         )}
+        {project?.example && <div className="portfolio-example-notice">
+          <p><strong>{cachedExample ? "Cached workflow example." : "Bundled source example."}</strong>{" "}
+            {cachedExample ? "The real scheduler runs prepared responses and records a trace. No model calls or imported repository execution." : "Inspect the source map and code without executing the repository. The cached workflow is a separate runnable manifest."}</p>
+          <div className="row">
+            {cachedExample && <button className="button small" disabled={!!busy} onClick={() => openExample()}>Inspect source example</button>}
+            <button className="button small" disabled={!!busy} onClick={() => openExample(true)}><Play size={13} /> {cachedExample ? "Run again (free)" : "Run cached workflow"}</button>
+          </div>
+        </div>}
         <main className={`main-content ${graphStep ? "graph-content" : ""}`}>
           {content}
         </main>
@@ -5678,13 +5734,13 @@ await trace.run(() => trace.span(
             <span className="dot" />
             {busy ||
               (isHosted
-                ? "Saved graphs and redacted run evidence stay on your private server"
+                ? "Your projects and redacted run evidence stay in your workspace"
                 : "Saved graphs and redacted run evidence stay on this device")}
           </span>
           <span>
             {project
               ? `${project.graph.nodes.length} components · revision ${project.graph.revision}`
-              : "Agent Workbench"}
+              : "Citadel Studio"}
             <span className="footer-separator">·</span>
             {docker ? "Code sandbox ready" : "Built-in tools ready"}
           </span>
@@ -6098,7 +6154,7 @@ function CredentialsModal({
     >
       <p className="muted">
         Choose a provider, validate access, then select a compatible model. Keys
-        stay on the local server and never enter browser storage or exports.
+        stay in your server-side session and never enter browser storage or exports.
       </p>
       <div className="credential-grid">
         <section>
@@ -6114,11 +6170,9 @@ function CredentialsModal({
                     <strong>{c.label}</strong>
                     <small>
                       {c.provider} ·{" "}
-                      {c.source === "session"
-                        ? "server session"
-                        : "local secret file"}
+                      {c.source === "session" ? "server session" : c.source === "configured" ? "configured on server" : c.source === "example" ? "prepared example · no key" : "local secret file"}
                     </small>
-                    <Status value={c.valid ? "validated" : "unvalidated"} />
+                    <Status value={c.source === "example" ? "cached" : c.source === "configured" ? "configured" : c.valid ? "validated" : "unvalidated"} />
                     {modelCount[c.id] !== undefined && (
                       <small>{modelCount[c.id]} available text models</small>
                     )}
@@ -6126,13 +6180,13 @@ function CredentialsModal({
                   </div>
                   <button
                     className="button small"
-                    disabled={!!pending}
+                    disabled={!!pending || c.source === "example"}
                     onClick={() => action(c.id, () => validate(c))}
                   >
                     {pending === c.id ? (
                       <Loader2 size={13} className="spin" />
                     ) : (
-                      "Validate"
+                      c.source === "example" ? "Prepared" : "Validate"
                     )}
                   </button>
                 </div>

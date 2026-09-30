@@ -1,69 +1,41 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Geist+Mono:wght@400;500&display=swap");
-:root {
-  font-family:
-    "DM Sans",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=Roboto+Mono:wght@400..600&display=swap");
+:root.lovable-ui {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
+  --bg: var(--bg-primary);
+  --sidebar: var(--bg-base);
+  --canvas: var(--bg-base);
+  --card: var(--bg-secondary);
+  --elevated: var(--bg-tertiary);
+  --text: var(--fg-primary);
+  --muted: var(--fg-tertiary);
+  --subtle: var(--fg-tertiary);
+  --border: var(--border-primary);
+  --border-strong: var(--border-depth);
+  --hover: var(--bg-muted);
+  --primary: var(--bg-accent);
+  --primary-text: var(--fg-emphasis);
+  --accent: var(--fg-accent);
+  --accent-bg: var(--bg-accent-translucent);
+  --purple: var(--fg-special);
+  --edge: var(--fg-tertiary);
+  --dots: var(--border-depth);
+  --error: var(--fg-destructive);
+  --error-bg: var(--bg-destructive-translucent);
+  --amber: var(--fg-attention);
+  --amber-bg: var(--bg-attention-translucent);
+  --shadow: var(--shadow-floating-md);
+  --node-shadow: var(--shadow-surface-xxs);
+  font-family: var(--font-sans);
   font-synthesis: none;
-  color-scheme: light;
-  --bg: #fff;
-  --sidebar: #f7f7f5;
-  --canvas: #fafaf8;
-  --card: #fff;
-  --elevated: #f8f8f6;
-  --text: #242724;
-  --muted: #82867f;
-  --subtle: #a6aaa3;
-  --border: #e6e8e2;
-  --border-strong: #d2d6ce;
-  --hover: #f0f2ed;
-  --primary: #242924;
-  --primary-text: #fff;
-  --accent: #5b7963;
-  --accent-bg: #edf3ed;
-  --purple: #9182a8;
-  --edge: #89978a;
-  --dots: #d9ddd5;
-  --error: #b24540;
-  --error-bg: #fbefec;
-  --amber: #a16e32;
-  --amber-bg: #fcf5e9;
-  --shadow: 0 16px 54px #202a1d15;
-  --node-shadow: 0 3px 12px #21291c07;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.5;
+  color-scheme: light;
   background: var(--bg);
   color: var(--text);
 }
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #1b1d1b;
-  --sidebar: #171917;
-  --canvas: #1f221e;
-  --card: #232622;
-  --elevated: #282c27;
-  --text: #e5e9e1;
-  --muted: #969e90;
-  --subtle: #747d6f;
-  --border: #333930;
-  --border-strong: #4c5547;
-  --hover: #2c3329;
-  --primary: #e4eadd;
-  --primary-text: #21281e;
-  --accent: #a4c2a5;
-  --accent-bg: #2b3a2b;
-  --purple: #ae9ac9;
-  --edge: #87977e;
-  --dots: #3a4334;
-  --error: #e8a098;
-  --error-bg: #422e29;
-  --amber: #ddbd82;
-  --amber-bg: #3b3525;
-  --shadow: 0 16px 54px #0005;
-  --node-shadow: 0 3px 15px #0001;
-}
+:root.lovable-ui[data-theme="dark"] { color-scheme: dark; }
+body { font-size: 14px; }
 * {
   box-sizing: border-box;
 }
@@ -185,7 +157,7 @@ kbd,
 .node-role,
 .count,
 .brand-caption {
-  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: "Roboto Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 code {
   font-size: 11px;
@@ -546,7 +518,7 @@ kbd {
   color: var(--text);
 }
 .step-number {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 8px;
   color: var(--subtle);
 }
@@ -868,7 +840,7 @@ kbd {
   color: var(--muted);
 }
 .number {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -910,7 +882,7 @@ kbd {
   font-size: 12px;
 }
 .code-input {
-  font-family: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  font-family: "Roboto Mono", ui-monospace, SFMono-Regular, monospace;
   font-size: 11px;
   line-height: 1.8;
   background: var(--canvas);
@@ -1610,7 +1582,7 @@ details ul {
   font-size: 9px;
 }
 .role-pill {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
   padding: 4px 7px;
   border-radius: 4px;
@@ -1937,7 +1909,7 @@ details ul {
   flex: 1;
 }
 .candidate-index {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   padding: 5px 7px;
   border: 1px solid var(--border);
@@ -3521,7 +3493,7 @@ details ul {
   background: var(--canvas);
   border: 1px solid var(--border);
   border-radius: 7px;
-  font-family: "Geist Mono", monospace;
+  font-family: "Roboto Mono", monospace;
   font-size: 11px;
   line-height: 1.8;
   color: var(--text);
@@ -3640,7 +3612,7 @@ button.source-reference-item:hover {
   background: var(--canvas);
   overflow: auto;
   max-height: 55vh;
-  font-family: "Geist Mono", monospace;
+  font-family: "Roboto Mono", monospace;
   font-size: 11px;
   line-height: 1.85;
 }

@@ -24,6 +24,7 @@ test(
         {
           cwd: isolated,
           env: {
+            PORTFOLIO_AUTH_ENABLED: "0",
             PATH: process.env.PATH,
             HOME: isolated,
             PORT: "3928",

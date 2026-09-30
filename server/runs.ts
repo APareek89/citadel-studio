@@ -1,3 +1,5 @@
+import { exampleOutput } from "./examples.js";
+import { tenantKey, bindTenant, authEnabled } from "./tenant.js";
 import { EventEmitter } from "node:events";
 import type {
   Run,
@@ -8,7 +10,7 @@ import type {
   RunEvent,
   RepoInfo,
 } from "../shared/types.js";
-import { state, id, now, save, journal, projectById } from "./store.js";
+import { state, id, now, save, journal, projectById, assertWriteCapacity } from "./store.js";
 import {
   generate,
   modelFor,
@@ -132,6 +134,8 @@ export async function preflight(
 ): Promise<Preflight> {
   const project = projectById(projectId);
   const graph = override || project.graph;
+  const cached = config.credentialId === "cached-example";
+  if (cached && (project.example?.kind !== "cached-workflow" || project.repo)) throw new Error("Cached provider is only available in the separate workflow example.");
   const repo = repoOverride === undefined ? project.repo : repoOverride;
   const result = repo
     ? { ok: true, issues: [] as Preflight["issues"], warnings: [] as string[] }
@@ -177,11 +181,12 @@ export async function preflight(
   return result;
 }
 export function emit(run: Run, event: Omit<RunEvent, "id" | "time">) {
+  if (authEnabled() && !state.runs.includes(run)) throw new Error("Run not found in this workspace.");
   const safe = safeObject({ ...event, id: id("evt"), time: now() });
   run.events.push(safe);
   journal({ runId: run.id, ...safe });
   save();
-  bus.emit(run.id, run);
+  bus.emit(tenantKey(run.id), run);
 }
 export async function startRun(args: {
   projectId: string;
@@ -193,6 +198,8 @@ export async function startRun(args: {
   budget?: Budget;
   repoSnapshot?: RepoInfo | null;
 }): Promise<Run> {
+  assertWriteCapacity(4 * 1024 * 1024);
+  if (state.runs.length >= 300) throw new Error("Workspace run limit reached. Existing runs were preserved.");
   const project = projectById(args.projectId);
   const check = await preflight(
     project.id,
@@ -225,17 +232,18 @@ export async function startRun(args: {
   state.runs.unshift(run);
   save();
   const controller = new AbortController();
-  controllers.set(run.id, controller);
+  const key = tenantKey(run.id);
+  controllers.set(key, controller);
   const timeout = setTimeout(
     () => controller.abort(new Error("Run time limit exceeded")),
     graph.limits.timeoutMs,
   );
-  const promise = (async () => {
+  const promise = bindTenant(async () => {
     try {
       run.status = "running";
       emit(run, {
         type: "run.started",
-        message: repoSnapshot
+        message: args.config.credentialId === "cached-example" ? "Executing cached fixture through the graph scheduler; no model or repository execution" : repoSnapshot
           ? "Executing isolated source adapter"
           : "Executing graph revision " + graph.revision,
       });
@@ -254,7 +262,9 @@ export async function startRun(args: {
         input: string,
         options?: Omit<GenerateOptions, "signal">,
       ) => {
-        const result = await call(system, input, options);
+        const result = args.config.credentialId === "cached-example"
+          ? { text: exampleOutput, usage: { inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 } }
+          : await call(system, input, options);
         run.usage.inputTokens += result.usage.inputTokens;
         run.usage.outputTokens += result.usage.outputTokens;
         if (result.usage.estimatedCostUsd !== undefined)
@@ -303,20 +313,22 @@ export async function startRun(args: {
       });
     } finally {
       clearTimeout(timeout);
-      controllers.delete(run.id);
+      controllers.delete(key);
       save();
     }
     return run;
   })();
-  completions.set(run.id, promise);
-  void promise.finally(() => completions.delete(run.id));
+  completions.set(key, promise);
+  void promise.finally(() => completions.delete(key));
   return run;
 }
 export async function waitRun(run: Run) {
-  return completions.get(run.id) || run;
+  if (!state.runs.some(r => r === run)) throw new Error("Run not found");
+  return completions.get(tenantKey(run.id)) || run;
 }
 export function cancelRun(runId: string) {
-  const c = controllers.get(runId);
+  if (!state.runs.some(r => r.id === runId)) return undefined;
+  const c = controllers.get(tenantKey(runId));
   if (c) c.abort(new Error("Stopped by user"));
   return state.runs.find((r) => r.id === runId);
 }

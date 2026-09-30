@@ -28,12 +28,12 @@ export function readHostingConfig(
       "WORKBENCH_PUBLIC_ORIGIN must be an HTTPS origin without credentials, path, query or fragment.",
     );
   const proxyToken = env.WORKBENCH_PROXY_TOKEN;
-  if (
+  if ((env.PORTFOLIO_AUTH_ENABLED ?? process.env.PORTFOLIO_AUTH_ENABLED) === "0" && (
     !proxyToken ||
     proxyToken.length < 32 ||
     proxyToken.length > 512 ||
     /\s/.test(proxyToken)
-  )
+  ))
     throw new Error(
       "Hosted mode requires a random WORKBENCH_PROXY_TOKEN of 32–512 non-whitespace characters.",
     );

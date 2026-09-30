@@ -422,6 +422,7 @@ test("JavaScript and Python helpers send nested real operations to the local rec
     const program = `import importlib.util\nspec=importlib.util.spec_from_file_location('workbench_client', ${JSON.stringify(sdkPath)})\nm=importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nt=m.WorkbenchTrace('Python app', input='question')\nwith t.run() as root:\n    with t.span('Research', role='agent') as child:\n        child['output']='Python answer'\n    root['output']=child['output']\nprint(t.trace_id)`;
     const result = await promisify(execFile)("python3", ["-c", program], {
       env: {
+            PORTFOLIO_AUTH_ENABLED: "0",
         PATH: process.env.PATH,
         WORKBENCH_URL: url,
         WORKBENCH_TOKEN: token,

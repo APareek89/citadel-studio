@@ -1,10 +1,50 @@
 # Architecture flow
 
-Source-reviewed snapshot: 25 September 2026. **IMPLEMENTED** means the corresponding source exists and was inspected; it does not mean the journey has passed live QA. **PLANNED** means that boundary is not implemented. Source review is separate from free integration tests and any paid inference validation. The earlier HTML prototype is not this runtime.
+Historical source snapshot: 25 September 2026, with the portfolio integration delta below dated 30 September. **IMPLEMENTED** means the corresponding source exists and was inspected; it does not mean the journey has passed live QA. **PLANNED** means that boundary is not implemented. Source review is separate from free integration tests and any paid inference validation. The earlier HTML prototype is not this runtime.
 
 This Markdown file is the canonical authored diagram source. Its Mermaid fences are mirrored in `docs/mermaid/`; the skill's build script generates `docs/architecture-flow.html`. Diagrams are not generated automatically from code. Refresh them whenever a source boundary or execution rule changes.
 
 The user selected a standalone viewer; no in-app debug tab is included. The generated HTML loads Mermaid 11 from a CDN and needs network access to render. Diagram text stays local; the only external request is for the rendering library and its dependencies.
+
+## Portfolio accounts and cached example — 30 September 2026
+
+The new portfolio release adds Auth.js email/password sessions backed by bcrypt users and revocation rows in PostgreSQL. Verified identity enters an AsyncLocalStorage tenant namespace; workspace state, source roots, provider credentials and background work retain that owner. Source bundles use private S3 persistence and digest verification. The React account gate resets the workspace on identity changes and uses user-scoped saved selection. These modules are implemented; merged isolation/browser/live acceptance is tracked in the current Handoff and Loop rather than inferred from the diagram.
+
+The example endpoint creates an owner-scoped static source map and a **separate** cached manifest. The latter uses normal preflight/scheduler/events with prepared responses and no provider call. Neither path claims that imported source executed. No image/media feature or Agentlane integration was added.
+
+Diagram 14 supersedes the account/storage boundary of historical single-owner diagram 13 for this release. The original preview and infrastructure remain unchanged; historical Basic Auth, one-owner storage and unbuilt-account statements below describe that older deployment, not this portfolio code.
+
+```mermaid
+%% 14 IMPLEMENTED modules — portfolio integration and live acceptance tracked separately
+flowchart TD
+B["Open Citadel Studio<br/>[DATA · browser]<br/>in: app URL and cookie<br/>out: account check"]:::data
+S{"Session active?<br/>[FUNCTION · Auth.js and PostgreSQL]<br/>in: signed session and revocation row<br/>out: verified user or sign-in gate"}:::dec
+L["Sign up or sign in<br/>[LIBRARY · Auth.js Credentials and bcrypt]<br/>in: email and password; signup 12 characters to 72 bytes<br/>out: signed session and revocable database record"]:::data
+T["Enter owner namespace<br/>[LIBRARY · AsyncLocalStorage]<br/>in: verified user UUID<br/>out: private state, credential vault and source paths"]:::data
+P["Persist source bundle<br/>[LIBRARY · private S3]<br/>in: filtered owner source files<br/>out: private object reference and verified digest"]:::data
+C{"Choose example path<br/>[FUNCTION · example action]<br/>in: owner action<br/>out: source project or separate cached manifest"}:::dec
+M["Inspect source map<br/>[FUNCTION · static discovery]<br/>in: bundled repository<br/>out: visible and hidden nodes plus source references; no execution"]:::fn
+R["Run cached workflow<br/>[FUNCTION · normal preflight and scheduler]<br/>in: separate manifest, prepared input and fixture provider<br/>out: node events and prepared response; zero model calls"]:::fn
+O["Inspect recorded trace<br/>[DATA · owner run snapshot]<br/>in: actual scheduler events<br/>out: recorded graph, output and timing"]:::data
+E["Reset workspace on identity change<br/>[FUNCTION · React keyed workspace]<br/>in: signout, changed user or API 401<br/>out: cleared drafts and user-scoped project selection"]:::fn
+B --> S
+S -->|missing or revoked| L
+L --> S
+S -->|active| T
+T --> P
+T --> C
+C -->|source| M
+C -->|cached workflow| R
+R --> O
+T -->|session change| E
+E --> S
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+```
 
 ## Current complete-flow verification boundary
 

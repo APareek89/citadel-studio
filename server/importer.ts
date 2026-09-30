@@ -1,3 +1,4 @@
+import { assertTenantPath, authEnabled } from "./tenant.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
@@ -38,6 +39,7 @@ const supported = /\.(?:[cm]?[jt]sx?|py|json|md|css|html|sql|toml|ya?ml)$/i;
 
 /** Metadata only: never read .env, credentials, git configuration or symlink targets as source. */
 export async function sourceFiles(root: string): Promise<string[]> {
+  if (authEnabled()) assertTenantPath(root);
   const files: string[] = [];
   const walk = async (directory: string, depth = 0): Promise<void> => {
     if (depth > 6 || files.length >= 500) return;
@@ -78,6 +80,7 @@ export async function readSource(
     relative.split(/[\\/]/).includes("..")
   )
     throw new Error("Source path is not allowed.");
+  assertTenantPath(root);
   const candidate = path.resolve(root, relative);
   const resolved = await realpath(candidate);
   if (
@@ -92,7 +95,7 @@ export async function readSource(
 }
 
 async function git(root: string, args: string[]): Promise<string> {
-  const env = Object.fromEntries(
+  const env = authEnabled() ? Object.fromEntries(["PATH", "LANG", "LC_ALL", "TMPDIR"].filter(k => process.env[k]).map(k => [k, process.env[k]])) : Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
   );
   const { stdout } = await execFileAsync(
@@ -128,7 +131,8 @@ export async function discoverRepo(
     throw new Error(
       "Connect the existing local checkout first. Automatic URL cloning is not enabled.",
     );
-  const root = await realpath(path.resolve(inputPath));
+  if (authEnabled() && (await lstat(path.resolve(inputPath))).isSymbolicLink()) throw new Error("Source symlinks are not imported.");
+  const root = assertTenantPath(await realpath(path.resolve(inputPath)));
   if (!(await lstat(root)).isDirectory())
     throw new Error("Choose a local repository directory.");
   const files = await sourceFiles(root);

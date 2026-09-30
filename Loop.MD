@@ -83,3 +83,22 @@ Live hypothesis, recorded before spend: after the free/code/browser gate, use th
 - Free merged suite189/189, production build, fresh production-only package smoke and13/13 diagram parsing pass. Independent review covered12/12 failure categories. Native ingestion now rejects invalid tokens before JSON parsing.
 - Live deployment transport (zero model calls):26 public endpoint checks,17 post-restart checks and real authenticated SSE with synthetic spans pass. Saved project/trace retained across replacement of the app release; old receiver token expired. Cloud installer permission/readiness defects were reproduced and corrected. Installed source6e7c8b5.
 - Cloud browser acceptance remains incomplete: Codex blocked the temporary authenticated URL; no outsideChrome or security bypass used. Prior local UI acceptance does not replace this missing cloud UI check. Evidence and platform limits are explicit in docs/QA-REPORT.md.
+
+## 30 September portfolio launch — local integration gate
+
+Fresh default-branch baseline: production build and 189/189 free tests pass with zero skips; root Codex browser verifies static import, source/hidden-node inspection, a free source-review plan and unsupported execution messaging. The first full-concurrency startup timeout is retained, not rewritten as a pass.
+
+Next free gate: real email/password signup/signin/signout and session expiry; two-owner state/credential/source/telemetry isolation; public GitHub plus optional PAT; free source example → separate cached scheduler workflow → trace/output; account switch clears client selections/drafts; desktop/mobile light/dark graph controls. Provider mocks only. New deployment and exactly one root-triggered live inference proof remain pending.
+
+- Root local authenticated CUA: signup → source viewer → cached scheduler run → ordinary Check Setup/Run → output → signout/signin pass. Desktop light/dark and390×844 mobile pass after fixing the wrapped toolbar and accessible icon names; no browser errors. New useful source fixture and final backend restart remain pending. No paid inference.
+
+- Final useful-source CUA passed on a fresh second account: empty workspace → example with6 visible nodes/5 relationships/4 hidden resources → real LangGraph source viewer, honest source-only labels and no browser warnings/errors. Backend targeted45 checks and real HTTP Auth.js/PG revocation/isolation pass. The final full run is repeating after208/209 exposed a Git-monitor ENOENT race; no provider calls and no original data touched.
+
+- Final offline gate: **209/209 pass, zero failures/skips**, plus a separate passing real Auth.js/PostgreSQL HTTP test. The transient Git-file monitor race is fixed without removing source-size/publication checks. Root independently verified logs. Auth, source example, cached execution, preserved modes, account switch, desktop/mobile and both themes now pass local gates. New public deployment and root’s single controlled live inference remain pending.
+
+
+## 30 September portfolio launch — live free gate
+
+Corrected image `05fc03d692a19813` is live. Root matched the served UI hash to the reviewed generation-fence build and verified source/example/cached run, both themes and no browser errors/warnings. The separate ten-group HTTP smoke covers real accounts, A/B access denial, native capabilities, export, cached scheduler and cookie/SSE revocation. Private source upload and cold hydration restored exact file hashes from the saved S3 version; the foreign account remained denied and anonymous S3 access returned 403.
+
+The final client-only delta passed three session-order regressions plus the mutation contract (4/4), a fresh build and guarded current-tree/history scans. The earlier full209-test receipt remains identified separately. The one controlled live source-mapping proof then passed: exactly one Gemini 3.5 Flash Lite dispatch and HTTP 200 response at 2026-09-30T12:46:42.087Z, 1,299 input/569 output/zero thinking tokens and estimated US$0.0018122. Independent audit verified 4/4 recognized candidates mapped, zero unresolved, eight source citations and unchanged source/S3 hashes. Final ordinary-runtime/UI confirmation passed with no proof guard, a zero-token/zero-cost cached rerun, persisted AI source-map evidence and no console warnings/errors. Exact staged scans and root commit/push approval remain the final release gate. No development provider call was made.

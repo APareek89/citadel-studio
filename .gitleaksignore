@@ -1,0 +1,5 @@
+# Reviewed synthetic loopback fixture credentials only. Run scripts/check_secret_scan_exceptions.py before scanning.
+tests/langfuse.test.ts:generic-api-key:27
+ba4153bedb9f2f0660bf0f729b9860a92300ea12:tests/langfuse.test.ts:generic-api-key:27
+tests/source-preview.test.ts:generic-api-key:332
+ba4153bedb9f2f0660bf0f729b9860a92300ea12:tests/source-preview.test.ts:generic-api-key:331

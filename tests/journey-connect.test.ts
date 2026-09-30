@@ -241,6 +241,7 @@ log({kind:'blocked-fetch'});throw new Error('Unmocked fetch disabled by journey 
         {
           cwd: workspace,
           env: {
+            PORTFOLIO_AUTH_ENABLED: "0",
             PATH: bin + path.delimiter + process.env.PATH,
             TMPDIR: process.env.TMPDIR,
             PORT: String(port),

@@ -1,3 +1,4 @@
+import { ensureUploadedSource } from "./uploads.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Graph, RepoInfo, SourceRef } from "../shared/types.js";
@@ -182,6 +183,7 @@ export async function collectReviewEvidence(
   graph: Graph,
   repo: RepoInfo,
 ): Promise<ReviewEvidence> {
+  await ensureUploadedSource(repo);
   const discovered = new Set(await sourceFiles(repo.path));
   const inventory = [...new Set(repo.sources.map((source) => source.path))];
   const allowed = new Set(inventory.filter((file) => discovered.has(file)));

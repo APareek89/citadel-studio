@@ -1,12 +1,15 @@
+import { tenantValue, hasTenant } from "./tenant.js";
 // Remember values for redaction for the life of the process, even after disconnect.
 // Connection modules hold their own active secrets; nothing here is persisted.
-const values = new Set<string>();
+const configuredValues = new Set<string>();
+const values = () => tenantValue("integration-redactions", () => new Set<string>());
+export function registerServerSecret(value?: string) { if (value && value.length >= 8) configuredValues.add(value); }
 export function registerIntegrationSecret(value?: string) {
-  if (value && value.length >= 8) values.add(value);
+  if (value && value.length >= 8) values().add(value);
 }
 export function redactIntegrationSecrets(input: string) {
   let text = input;
-  for (const value of values) text = text.split(value).join("[REDACTED]");
+  for (const value of [...configuredValues, ...(hasTenant() ? values() : [])]) text = text.split(value).join("[REDACTED]");
   return text.replace(
     /(?:github_pat_[\w]{20,}|gh[pousr]_[\w]{20,}|[ps]k-lf-[\w-]{12,}|wb_[\w-]{30,})/g,
     "[REDACTED]",

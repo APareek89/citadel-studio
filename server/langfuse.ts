@@ -1,3 +1,4 @@
+import { authEnabled, tenantMap, tenantSet } from "./tenant.js";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createHash } from "node:crypto";
@@ -22,9 +23,9 @@ type Connection = {
   remoteId: string;
   lastSyncAt?: string;
 };
-const connections = new Map<string, Connection>();
-const generations = new Map<string, number>();
-const syncing = new Set<string>();
+const connections = tenantMap<string, Connection>("langfuse-connections");
+const generations = tenantMap<string, number>("langfuse-generations");
+const syncing = tenantSet<string>("langfuse-syncing");
 export function langfuseUrl(value: string) {
   let url: URL;
   try {
@@ -47,7 +48,7 @@ export function langfuseUrl(value: string) {
     CLOUD.includes(url.hostname) &&
     (!url.port || url.port === "443");
   const local =
-    ["127.0.0.1", "localhost"].includes(url.hostname) &&
+    !authEnabled() && ["127.0.0.1", "localhost"].includes(url.hostname) &&
     ["http:", "https:"].includes(url.protocol);
   if (!cloud && !local)
     throw new Error(
@@ -171,6 +172,7 @@ export async function connectLangfuse(projectId: string, raw: unknown) {
   return langfuseStatus(projectId);
 }
 export function disconnectLangfuse(projectId: string) {
+  projectById(projectId);
   generations.set(projectId, (generations.get(projectId) || 0) + 1);
   connections.delete(projectId);
 }

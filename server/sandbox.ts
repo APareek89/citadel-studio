@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 const exec = promisify(execFile);
 export async function dockerAvailable() {
+  if (process.env.WORKBENCH_PUBLIC_ORIGIN || process.env.PORTFOLIO_AUTH_ENABLED === "1") return false;
   try {
     await exec("docker", ["image", "inspect", "node:22-alpine"], {
       timeout: 3000,

@@ -1,3 +1,8 @@
+import { tenantRoot, requireTenant, authEnabled, assertTenantPath } from "./tenant.js";
+import { withImportSlot, checkWorkspaceSpace } from "./import-limits.js";
+import { persistSourceBundle, hydrateSourceBundle, type SourceBundleRef } from "./source-storage.js";
+import { existsSync } from "node:fs";
+import type { RepoInfo } from "../shared/types.js";
 import {
   mkdir,
   mkdtemp,
@@ -21,6 +26,7 @@ export interface UploadedFolder {
   skippedFiles: number;
   skipped: { path: string; reason: string }[];
   totalBytes: number;
+  sourceBundle?: SourceBundleRef;
 }
 const MAX_FILES = 500,
   MAX_BYTES = 10 * 1024 * 1024,
@@ -81,9 +87,10 @@ async function privateDirectory(file: string): Promise<string> {
 }
 
 /** Store reviewed text bytes only. Uploaded code, package hooks and Git metadata never execute. */
-export async function importUploadedFolder(
-  value: FolderUpload,
-): Promise<UploadedFolder> {
+export async function importUploadedFolder(value: FolderUpload): Promise<UploadedFolder> {
+  return withImportSlot(() => writeUpload(value));
+}
+async function writeUpload(value: FolderUpload, restored?: SourceBundleRef, restoreTarget?: string): Promise<UploadedFolder> {
   if (
     !value ||
     typeof value.name !== "string" ||
@@ -164,7 +171,8 @@ export async function importUploadedFolder(
     throw new Error(
       "No supported non-sensitive source files remain after filtering.",
     );
-  const data = path.resolve(process.env.WORKBENCH_DATA_DIR || ".local");
+  await checkWorkspaceSpace(totalBytes);
+  const data = tenantRoot();
   await mkdir(data, { recursive: true, mode: 0o700 });
   const base = await privateDirectory(data),
     uploads = path.join(base, "uploads");
@@ -185,7 +193,11 @@ export async function importUploadedFolder(
         flag: "wx",
       });
     }
-    const destination = path.join(root, "folder-" + randomUUID());
+    const sourceBundle = restored || (authEnabled() ? await persistSourceBundle(requireTenant().id,
+      accepted.map(({ path, content }) => ({ path, content }))) : undefined);
+    const destination = restoreTarget || path.join(root, "folder-" + randomUUID());
+    if (path.dirname(destination) !== root || !/^folder-[a-f0-9-]{36}$/.test(path.basename(destination)))
+      throw new Error("Invalid source storage path.");
     await rename(staging, destination);
     staging = undefined;
     return {
@@ -195,8 +207,25 @@ export async function importUploadedFolder(
       skippedFiles: skipped.length,
       skipped,
       totalBytes,
+      ...(sourceBundle ? { sourceBundle } : {}),
     };
   } finally {
     if (staging) await rm(staging, { recursive: true, force: true });
   }
+}
+
+/** Restore only the exact authenticated source reference, then reapply normal path/text validation. */
+export async function ensureUploadedSource(repo: RepoInfo): Promise<void> {
+  if (!authEnabled()) return;
+  const base = path.join(tenantRoot(), "uploads");
+  if (repo.sourceKind !== "upload") { assertTenantPath(repo.path); return; }
+  if (path.dirname(repo.path) !== base || !/^folder-[a-f0-9-]{36}$/.test(path.basename(repo.path)))
+    throw new Error("Source is outside this workspace.");
+  if (existsSync(repo.path)) { assertTenantPath(repo.path); return; }
+  if (!repo.sourceBundle) throw new Error("The uploaded source bundle is unavailable.");
+  await withImportSlot(async () => {
+    if (existsSync(repo.path)) { assertTenantPath(repo.path); return; }
+    const files = await hydrateSourceBundle(requireTenant().id, repo.sourceBundle!);
+    await writeUpload({ name: repo.name, files }, repo.sourceBundle, repo.path);
+  });
 }

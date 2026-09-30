@@ -1,3 +1,5 @@
+import { directoryBytes, checkWorkspaceSpace, withImportSlot } from "./import-limits.js";
+import { authEnabled, tenantRoot, tenantValue } from "./tenant.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
@@ -45,15 +47,14 @@ export interface GithubStatus {
   authSource: "token" | "gh" | null;
   repositoryCount?: number;
 }
-let tokenSession: { token: string; login: string; valid: boolean } | undefined;
-let repositoryCount: number | undefined;
-let authGeneration = 0;
+interface GithubSession { tokenSession?: { token: string; login: string; valid: boolean }; repositoryCount?: number; authGeneration: number }
+const session = () => tenantValue<GithubSession>("github", () => ({ authGeneration: 0 }));
 let redactionHook: (token: string | undefined) => void = () => {};
 export function setGithubRedactionHook(
   hook: (token: string | undefined) => void,
 ): void {
   redactionHook = hook;
-  hook(tokenSession?.token);
+  // Registered keys remain redacted after disconnect; no actor is read at startup.
 }
 const repoRoute =
   "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member";
@@ -73,7 +74,8 @@ async function tokenApi(route: string, token: string): Promise<unknown> {
     });
     if (!response.ok) {
       if (response.status === 401) {
-        if (tokenSession?.token === token) tokenSession.valid = false;
+        const current = session().tokenSession;
+        if (current?.token === token) current.valid = false;
         throw new GithubRequestError(
           "GitHub rejected this token. Reconnect with an active token.",
         );
@@ -132,29 +134,31 @@ export async function connectGithubToken(value: string): Promise<GithubStatus> {
   if (typeof value !== "string" || !/^[A-Za-z0-9_]{12,512}$/.test(value.trim()))
     throw new Error("Enter a complete GitHub token without whitespace.");
   const token = value.trim(),
-    generation = ++authGeneration;
+    generation = ++session().authGeneration;
   const login = accountLogin(await tokenApi("/user", token));
-  if (generation !== authGeneration)
+  if (generation !== session().authGeneration)
     throw new Error("GitHub connection was superseded by another request.");
   redactionHook(token);
-  tokenSession = { token, login, valid: true };
-  repositoryCount = undefined;
+  session().tokenSession = { token, login, valid: true };
+  session().repositoryCount = undefined;
   return { connected: true, login, authSource: "token" };
 }
 export function disconnectGithubToken(): void {
-  authGeneration++;
-  tokenSession = undefined;
-  repositoryCount = undefined;
+  session().authGeneration++;
+  session().tokenSession = undefined;
+  session().repositoryCount = undefined;
   redactionHook(undefined);
 }
 export async function githubStatus(): Promise<GithubStatus> {
-  if (tokenSession)
+  const current = session().tokenSession;
+  if (current)
     return {
-      connected: tokenSession.valid,
-      login: tokenSession.login,
+      connected: current.valid,
+      login: current.login,
       authSource: "token",
-      ...(repositoryCount === undefined ? {} : { repositoryCount }),
+      ...(session().repositoryCount === undefined ? {} : { repositoryCount: session().repositoryCount }),
     };
+  if (authEnabled()) return { connected: false, authSource: null };
   try {
     const login = accountLogin(
       JSON.parse(
@@ -165,7 +169,7 @@ export async function githubStatus(): Promise<GithubStatus> {
       connected: true,
       login,
       authSource: "gh",
-      ...(repositoryCount === undefined ? {} : { repositoryCount }),
+      ...(session().repositoryCount === undefined ? {} : { repositoryCount: session().repositoryCount }),
     };
   } catch {
     return { connected: false, authSource: null };
@@ -173,7 +177,7 @@ export async function githubStatus(): Promise<GithubStatus> {
 }
 
 function environment(): NodeJS.ProcessEnv {
-  const env = Object.fromEntries(
+  const env = authEnabled() ? Object.fromEntries(["PATH", "LANG", "LC_ALL", "TMPDIR"].filter(k => process.env[k]).map(k => [k, process.env[k]])) : Object.fromEntries(
     Object.entries(process.env).filter(
       ([key]) =>
         !key.startsWith("GIT_") && key !== "WORKBENCH_GITHUB_CLONE_TOKEN",
@@ -197,10 +201,21 @@ async function command(
   args: string[],
   timeout = TIMEOUT,
   extraEnv: NodeJS.ProcessEnv = {},
+  watchRoot?: string,
 ): Promise<string> {
+  if (authEnabled() && program === "gh") throw new Error("Connect your GitHub token to list private repositories.");
+  const controller = new AbortController();
+  let checking = false, quotaError = false;
+  const monitor = watchRoot && authEnabled() ? setInterval(() => {
+    if (checking) return;
+    checking = true;
+    Promise.all([directoryBytes(watchRoot, 64 * 1024 * 1024), checkWorkspaceSpace()])
+      .catch(() => { quotaError = true; controller.abort(); }).finally(() => { checking = false; });
+  }, 100) : undefined;
   try {
     const result = await execute(program, args, {
       env: { ...environment(), ...extraEnv },
+      signal: controller.signal,
       timeout,
       killSignal: "SIGKILL",
       maxBuffer: 2_000_000,
@@ -208,6 +223,7 @@ async function command(
     });
     return result.stdout;
   } catch (error) {
+    if (quotaError) throw new Error("Repository exceeds the hosted source storage limit.");
     const e = error as NodeJS.ErrnoException & { killed?: boolean };
     // CLI stderr can contain remote URLs or credential-helper diagnostics: never forward it.
     if (e.code === "ENOENT")
@@ -221,7 +237,7 @@ async function command(
     throw new Error(
       "GitHub operation failed. Check GitHub CLI login, repository access and network connectivity. No repository code was executed.",
     );
-  }
+  } finally { if (monitor) clearInterval(monitor); }
 }
 
 const gitArgs = [
@@ -243,9 +259,10 @@ const gitArgs = [
   "-c",
   "credential.https://github.com.helper=!gh auth git-credential",
 ];
+if (authEnabled()) gitArgs.splice(-2);
 
 export async function listGithubRepos(): Promise<GithubRepository[]> {
-  const current = tokenSession;
+  const current = session().tokenSession;
   if (current && !current.valid)
     throw new Error(
       "GitHub token is no longer valid. Reconnect or disconnect it before using CLI authentication.",
@@ -284,7 +301,7 @@ export async function listGithubRepos(): Promise<GithubRepository[]> {
         : {}),
     };
   });
-  if (current === tokenSession) repositoryCount = result.length;
+  if (current === session().tokenSession) session().repositoryCount = result.length;
   return result;
 }
 
@@ -381,8 +398,11 @@ async function verifyCheckout(
 
 /** Read-only source acquisition: never install, execute, recurse submodules or refresh an existing checkout. */
 export async function checkoutGithub(value: string): Promise<string> {
+  return withImportSlot(() => checkout(value));
+}
+async function checkout(value: string): Promise<string> {
   const parsed = githubUrl(value); // Validate before filesystem or CLI activity.
-  const data = path.resolve(process.env.WORKBENCH_DATA_DIR || ".local");
+  const data = tenantRoot();
   await mkdir(data, { recursive: true, mode: 0o700 });
   await directory(data);
   const managed = path.join(data, "repos");
@@ -420,12 +440,12 @@ export async function checkoutGithub(value: string): Promise<string> {
     const checkout = path.join(staging, "checkout");
     const template = path.join(staging, "empty-template");
     await mkdir(template, { mode: 0o700 });
-    const token = tokenSession;
+    const token = session().tokenSession;
     if (token && !token.valid)
       throw new Error(
         "GitHub token is no longer valid. Reconnect it before cloning.",
       );
-    const cloneArgs = token ? gitArgs.slice(0, -2) : gitArgs;
+    const cloneArgs = token && !authEnabled() ? gitArgs.slice(0, -2) : gitArgs;
     let cloneEnv: NodeJS.ProcessEnv = {};
     if (token) {
       const askpass = path.join(staging, "askpass.sh");
@@ -457,7 +477,9 @@ export async function checkoutGithub(value: string): Promise<string> {
       ],
       TIMEOUT,
       cloneEnv,
+      staging,
     );
+    if (authEnabled()) await directoryBytes(staging, 64 * 1024 * 1024);
     // Clone generated this local config with no user/system templates or filters.
     await verifyCheckout(checkout, await realpath(staging), parsed.identity);
     await command(
@@ -473,7 +495,11 @@ export async function checkoutGithub(value: string): Promise<string> {
         "--",
       ],
       30_000,
+      {},
+      staging,
     );
+    if (authEnabled()) await directoryBytes(staging, 64 * 1024 * 1024);
+    await checkWorkspaceSpace();
     // Our atomic directory lock serializes publication; never replace a pre-existing directory.
     if (await present(target)) {
       await verifyCheckout(target, root, parsed.identity);

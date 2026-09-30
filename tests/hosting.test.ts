@@ -198,6 +198,7 @@ test(
         {
           cwd: path.resolve(new URL("..", import.meta.url).pathname),
           env: {
+            PORTFOLIO_AUTH_ENABLED: "0",
             PATH: process.env.PATH,
             HOME: directory,
             PORT: String(port),
@@ -217,7 +218,7 @@ test(
       });
       for (
         let attempt = 0;
-        attempt < 100 && !logs.includes("Agent Workbench:");
+        attempt < 334 && !logs.includes("Agent Workbench:");
         attempt++
       ) {
         if (child.exitCode !== null) throw new Error(logs);

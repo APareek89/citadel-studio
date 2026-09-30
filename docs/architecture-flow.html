@@ -565,6 +565,37 @@ classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
 classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
 classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
 </pre>
+<h2>14 IMPLEMENTED modules — portfolio integration and live acceptance tracked separately</h2>
+<pre class="mermaid">%% 14 IMPLEMENTED modules — portfolio integration and live acceptance tracked separately
+flowchart TD
+B["Open Citadel Studio&lt;br/&gt;[DATA · browser]&lt;br/&gt;in: app URL and cookie&lt;br/&gt;out: account check"]:::data
+S{"Session active?&lt;br/&gt;[FUNCTION · Auth.js and PostgreSQL]&lt;br/&gt;in: signed session and revocation row&lt;br/&gt;out: verified user or sign-in gate"}:::dec
+L["Sign up or sign in&lt;br/&gt;[LIBRARY · Auth.js Credentials and bcrypt]&lt;br/&gt;in: email and password; signup 12 characters to 72 bytes&lt;br/&gt;out: signed session and revocable database record"]:::data
+T["Enter owner namespace&lt;br/&gt;[LIBRARY · AsyncLocalStorage]&lt;br/&gt;in: verified user UUID&lt;br/&gt;out: private state, credential vault and source paths"]:::data
+P["Persist source bundle&lt;br/&gt;[LIBRARY · private S3]&lt;br/&gt;in: filtered owner source files&lt;br/&gt;out: private object reference and verified digest"]:::data
+C{"Choose example path&lt;br/&gt;[FUNCTION · example action]&lt;br/&gt;in: owner action&lt;br/&gt;out: source project or separate cached manifest"}:::dec
+M["Inspect source map&lt;br/&gt;[FUNCTION · static discovery]&lt;br/&gt;in: bundled repository&lt;br/&gt;out: visible and hidden nodes plus source references; no execution"]:::fn
+R["Run cached workflow&lt;br/&gt;[FUNCTION · normal preflight and scheduler]&lt;br/&gt;in: separate manifest, prepared input and fixture provider&lt;br/&gt;out: node events and prepared response; zero model calls"]:::fn
+O["Inspect recorded trace&lt;br/&gt;[DATA · owner run snapshot]&lt;br/&gt;in: actual scheduler events&lt;br/&gt;out: recorded graph, output and timing"]:::data
+E["Reset workspace on identity change&lt;br/&gt;[FUNCTION · React keyed workspace]&lt;br/&gt;in: signout, changed user or API 401&lt;br/&gt;out: cleared drafts and user-scoped project selection"]:::fn
+B --&gt; S
+S --&gt;|missing or revoked| L
+L --&gt; S
+S --&gt;|active| T
+T --&gt; P
+T --&gt; C
+C --&gt;|source| M
+C --&gt;|cached workflow| R
+R --&gt; O
+T --&gt;|session change| E
+E --&gt; S
+classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
+classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
+classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
+classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
+classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
+classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
+</pre>
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
 mermaid.initialize({ startOnLoad:false, securityLevel:"loose", theme:"base",

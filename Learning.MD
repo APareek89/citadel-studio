@@ -201,3 +201,24 @@ Why 2: the local smoke ran installation and execution as the same user, and an i
 Deepest why [verification]: test the deployed identity and readiness contract, not merely the package contents or transient process state.
 Action: set umask 022 for npm installation, give read/search permission across the root-owned release while removing group/other writes, and require authenticated backend health before the installer reports success. Correct the empty previous-release receipt and omit irrelevant macOS xattrs from archives.
 Prevention: re-run the real installer under restrictive umask, then verify HTTPS and persistence as external clients. A passed package smoke remains useful but does not prove Linux service permissions.
+
+## 2026-09-30 — Source examples and hosted identity need separate boundaries
+
+The bundled source example is useful for map/source inspection but is not an executable imported app. The free run is a separate cached manifest using the actual scheduler and events; source and runtime evidence keep explicit labels. An imported graph alone is not permission or proof of execution.
+
+The previous browser kept a global project selection. Hosted accounts instead key selection by user, remount the full workspace on identity changes and return to sign-in after an API 401. This resets draft/model/trace state while server tenant checks remain the actual isolation boundary. Baseline automated tests also needed bounded concurrency: a three-second child startup assertion raced parallel TypeScript compilation, then all 189 unchanged tests passed at concurrency four.
+
+## 2026-09-30 — A new example exposed old browser request assumptions
+
+Symptom: Try with an example failed with415 after signup. Why: the browser API helper only adds JSON content type when a body exists; the new empty POST omitted `{}`. The server correctly kept its JSON mutation gate. The same caller audit found four older cancel/disconnect actions. All five now pass an explicit object, and a TypeScript AST regression checks every browser mutation call. This fixes the caller contract instead of weakening the server boundary.
+
+Mobile QA separately found wrapped graph controls overlapping their next row. The graph panel had a fixed height and allowed toolbar flex shrink while its children wrapped. Control rows now keep natural height and the mobile graph retains its own320px viewport. Hidden text also needed explicit accessible names on the sidebar brand/example controls.
+
+## 2026-09-30 — Delayed401 belonged to an earlier account
+
+Why-chain: a slow private request can resolve after logout/login; the API helper emitted a global expiry event without the request’s identity; the gate correctly reset state but could reset the newer user. Session-check epochs did not cover these separate API responses. The fix captures a client generation before API/export requests and advances it only when an accepted account identity changes. Old-generation failures cannot clear a newer workspace; current-session401 and same-user re-login are covered by deterministic tests. This is a UI ordering guard, never a substitute for server authorization.
+
+
+## 2026-09-30 — Recovery and mapping need their own live evidence
+
+A persistent workspace does not prove that a missing source folder can be recovered, and a useful cached graph does not prove provider-backed mapping. The live storage test preserved a synthetic upload folder, hydrated its saved exact S3 version through the authenticated route and compared both restored file hashes; the foreign account remained denied. The separate one-call mapping proof checked eight citations and unchanged source/S3 hashes after mapping all four recognized candidates. Neither check establishes arbitrary imported-code execution or general workspace backup. Keep those scopes explicit in the release claim.

@@ -75,6 +75,7 @@ export interface Alignment {
   graph: Graph;
 }
 export interface Project {
+  example?: { kind: "source" | "cached-workflow" };
   id: string;
   name: string;
   brief: string;
@@ -88,7 +89,7 @@ export interface Credential {
   id: string;
   label: string;
   provider: Provider;
-  source: "session" | "local-file";
+  source: "session" | "local-file" | "configured" | "example";
   valid: boolean;
   validatedAt?: string;
   error?: string;
@@ -189,6 +190,7 @@ export interface Preflight {
   warnings: string[];
 }
 export interface RepoInfo {
+  sourceBundle?: { ownerId: string; key: string; versionId: string; sha256: string; bytes: number };
   executionAvailable?: boolean;
   executionUnavailableReason?: string;
   sourceKind?: "upload";

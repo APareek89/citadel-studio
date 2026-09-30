@@ -163,6 +163,7 @@ globalThis.fetch=async(url,options={})=>{
         {
           cwd: workspace,
           env: {
+            PORTFOLIO_AUTH_ENABLED: "0",
             PATH: process.env.PATH,
             HOME: directory,
             TMPDIR: process.env.TMPDIR,
@@ -593,6 +594,7 @@ globalThis.fetch=async(url,options={})=>{
                 {
                   cwd: target,
                   env: {
+            PORTFOLIO_AUTH_ENABLED: "0",
                     PATH: process.env.PATH,
                     HOME: target,
                     API_KEY: syntheticKey,
