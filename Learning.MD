@@ -222,3 +222,12 @@ Why-chain: a slow private request can resolve after logout/login; the API helper
 ## 2026-09-30 — Recovery and mapping need their own live evidence
 
 A persistent workspace does not prove that a missing source folder can be recovered, and a useful cached graph does not prove provider-backed mapping. The live storage test preserved a synthetic upload folder, hydrated its saved exact S3 version through the authenticated route and compared both restored file hashes; the foreign account remained denied. The separate one-call mapping proof checked eight citations and unchanged source/S3 hashes after mapping all four recognized candidates. Neither check establishes arbitrary imported-code execution or general workspace backup. Keep those scopes explicit in the release claim.
+
+
+## Free FMEA review — 2 October 2026
+
+Current changes are local and unreleased. The native213-test suite and normal Auth.js/two-owner PostgreSQL HTTP checks passed with external network denied. The Build journey now includes a session-authored support brief and customer question through the real alignment/approval/run/export path with explicit synthetic model outputs.
+
+One reproduced runtime fix: remove every case-insensitive SSL-prefixed database URL option before applying the verified CA configuration. Actual `pg.Client` construction confirms URL options cannot disable verification. No schema migration, cloud change or provider call was performed.
+
+See `docs/qa/2026-10-02/REPORT.md`, `fmea.json`, and `validation.json`. The112 scenarios are not112 discovered bugs. Source-only import, Docker capability boundaries, live provider quality and multi-instance operation retain their stated limitations.

@@ -1,0 +1,17 @@
+{
+  "provider_calls": 0,
+  "cloud_mutations": 0,
+  "native_suite": {
+    "passed": 213,
+    "failed": 0,
+    "skipped": 0,
+    "command": "npm test"
+  },
+  "normal_auth_pg": "Actual Auth.js and dedicated localPG owner/source/export/run/session tests passed.",
+  "session_prompt": "Build HTTP journey now uses session-authored support assistant brief and customer question; exact payload assertions; provider outputs remain fixtures.",
+  "fix": "All case-insensitive SSL-prefixed URL options removed before verified TLS object is supplied.",
+  "residuals": [
+    "No inference quality or live availability claim.",
+    "Local macOS sandbox is tested; this is not a new hosted Docker capability proof."
+  ]
+}

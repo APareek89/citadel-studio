@@ -7,7 +7,7 @@ export function database(): pg.Pool {
   if (!raw) throw new Error("Authentication database is not configured.");
   const url = new URL(raw);
   const fixture = process.env.DATABASE_SSL === "disable" && ["127.0.0.1", "localhost"].includes(url.hostname);
-  for (const key of ["sslmode", "sslrootcert", "sslcert", "sslkey"]) url.searchParams.delete(key);
+  for (const key of [...url.searchParams.keys()]) if (key.toLowerCase().startsWith("ssl")) url.searchParams.delete(key);
   const caFile = process.env.DATABASE_SSL_CA_FILE;
   if (!fixture && !caFile) throw new Error("Verified database TLS requires a CA file.");
   pool = new pg.Pool({ connectionString: url.toString(), max: 6, connectionTimeoutMillis: 8000,

@@ -192,7 +192,7 @@ globalThis.fetch=async(url,options={})=>{
       assert.match(logs, /Agent Workbench:/);
       project = await ok<Project>("/api/projects", "POST", {
         name: "Journey fixture",
-        brief: "Build a support answer app",
+        brief: "Build a support assistant that answers from an approved customer note, keeps secrets out, and asks for review before releasing an uncertain answer.",
       });
       await t.test(
         "credential and compatibility gates stop before alignment/inference",
@@ -271,6 +271,7 @@ globalThis.fetch=async(url,options={})=>{
             (p: Project) => p.id === project.id,
           );
           assert.equal(proposed.graph.revision, 1);
+          assert(JSON.stringify(await requests()).includes(project.brief), "Session-authored request must reach the real alignment prompt unchanged");
           assert.equal(
             proposed.graph.nodes.some((n: any) => n.id === "agent_1"),
             false,
@@ -288,12 +289,13 @@ globalThis.fetch=async(url,options={})=>{
           await queue({ text: "A grounded answer" });
           const run = await ok<Run>("/api/runs", "POST", {
             projectId: project.id,
-            input: "Customer note",
+            input: "My invoice says paid, but my account is still paused. Explain the next step without inventing a refund policy.",
             config,
           });
           completed = await settle(run.id);
           assert.equal(completed.status, "completed");
           assert.equal(completed.output, "A grounded answer");
+          assert(JSON.stringify(await requests()).includes("My invoice says paid"), "Session-authored customer text must reach the accepted graph");
           assert.equal(completed.graph.revision, 2);
           assert.deepEqual(
             completed.events

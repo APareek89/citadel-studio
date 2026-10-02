@@ -17,3 +17,12 @@ Frontend/package typecheck and build pass. Root’s authenticated local browser 
 - Local and live free tests and authenticated browser QA are complete. The one controlled live source-mapping proof also passes. Final ordinary-runtime/UI confirmation also passes. Next: final exact staged scans and reviewed commits/push. No outside browser or unapproved provider call.
 
 **Session efficiency:** approximately 65% feature, 25% verification/environment and 10% integration correction. The baseline startup timeout was concurrency contention; restricting test concurrency retained every test.
+
+
+## Free FMEA review — 2 October 2026
+
+Current changes are local and unreleased. The native213-test suite and normal Auth.js/two-owner PostgreSQL HTTP checks passed with external network denied. The Build journey now includes a session-authored support brief and customer question through the real alignment/approval/run/export path with explicit synthetic model outputs.
+
+One reproduced runtime fix: remove every case-insensitive SSL-prefixed database URL option before applying the verified CA configuration. Actual `pg.Client` construction confirms URL options cannot disable verification. No schema migration, cloud change or provider call was performed.
+
+See `docs/qa/2026-10-02/REPORT.md`, `fmea.json`, and `validation.json`. The112 scenarios are not112 discovered bugs. Source-only import, Docker capability boundaries, live provider quality and multi-instance operation retain their stated limitations.
