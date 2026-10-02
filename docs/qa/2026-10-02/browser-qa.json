@@ -1,0 +1,20 @@
+{
+  "status": "parent_reported_browser_acceptance",
+  "source": "Root CUA confirmations in current task; auditor did not operate browser",
+  "generated_at": "2026-10-02T08:44:43.563306+00:00",
+  "checks": "Normal-auth preparedsource\u2192cachedworkflow:real scheduler4nodes completed0tokens;mobile390controls wrap.",
+  "provider_calls": 0,
+  "scope": "local normal-auth prepared workflow and mobile controls",
+  "screenshots": [
+    {
+      "path": "/Users/macbook/Documents/Codex/portfolio/_workstreams/portfolio-fmea-20261002/screenshots/citadel-source-desktop.png",
+      "sha256": "44fafa0f78ce97f20ce92d5a747e8416951cbaf61395214522b0523799a4b3a6",
+      "bytes": 108157
+    },
+    {
+      "path": "/Users/macbook/Documents/Codex/portfolio/_workstreams/portfolio-fmea-20261002/screenshots/citadel-workflow-mobile.png",
+      "sha256": "0c838489a4ac39e05441661ce1dd52ef862cd316fbc70717d0cbd51f3575c977",
+      "bytes": 40462
+    }
+  ]
+}

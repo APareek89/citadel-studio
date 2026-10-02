@@ -1,0 +1,19 @@
+{
+  "status": "image_only_update_verified",
+  "app": "citadel-studio",
+  "image": "sha256:81888b624f8796f4005de9915f3aa80e0998d75cff0f12149bc2f8ed4b47e172",
+  "image_id": "sha256:81888b624f8796f4005de9915f3aa80e0998d75cff0f12149bc2f8ed4b47e172",
+  "previous_image_id": "sha256:ad5c394678bb7775e951315cdee2a75732f0496390519c45c639dffaf1a26340",
+  "config_before_sha256": "44a6dff604bf0052bf1f3b42a1fa2ae3086ea37f4bdec76b3a74563565c5605e",
+  "config_after_sha256": "ccc5dff47bb2a8769e45dddc7c04486c3ea389a2b4204416a9e198513be5bef8",
+  "source_sha256": "c7aa90d8cd55d93135b0fcf6db30ecc36d84ccc413f208bc32b8854c86d2833b",
+  "config_preserved_except_image": true,
+  "environment_identical": true,
+  "mounts_identical": true,
+  "bounds_identical": true,
+  "other_apps_unchanged": true,
+  "auth": true,
+  "mock": false,
+  "provider_calls": 0,
+  "generated_at": "2026-10-02T08:55:23.632796+00:00"
+}
